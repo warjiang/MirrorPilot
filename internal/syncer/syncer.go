@@ -134,7 +134,10 @@ func (Runner) Run(cfg *config.Config, opts Options) ([]Result, error) {
 			continue
 		}
 		cfg.Images[t.Index].Synced = true
-		cfg.Images[t.Index].LastSyncedAt = now
+		if cfg.Images[t.Index].CreatedAt == "" {
+			cfg.Images[t.Index].CreatedAt = now
+		}
+		cfg.Images[t.Index].SyncedAt = now
 	}
 
 	if failed > 0 {

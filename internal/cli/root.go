@@ -36,6 +36,8 @@ func NewRootCmd() *cobra.Command {
 		newRemoveCmd(opts),
 		newMarkCmd(opts),
 		newListCmd(opts),
+		newSyncedCmd(opts),
+		newRemoteCmd(opts),
 		newMigrateCmd(opts),
 		newValidateCmd(opts),
 		newSyncCmd(opts),
@@ -85,12 +87,13 @@ func newAddCmd(opts *options) *cobra.Command {
 			}
 
 			cfg.Images = append(cfg.Images, config.Image{
-				Source:  source,
-				Target:  target,
-				Profile: profile,
-				Enabled: config.BoolPtr(enabled),
-				Synced:  false,
-				Notes:   note,
+				Source:    source,
+				Target:    target,
+				Profile:   profile,
+				Enabled:   config.BoolPtr(enabled),
+				Synced:    false,
+				CreatedAt: time.Now().UTC().Format(time.RFC3339),
+				Notes:     note,
 			})
 			lc.Config = cfg
 			if err := lc.Save(); err != nil {
@@ -217,9 +220,9 @@ func newMarkCmd(opts *options) *cobra.Command {
 				}
 				cfg.Images[i].Synced = synced
 				if synced {
-					cfg.Images[i].LastSyncedAt = ts
+					cfg.Images[i].SyncedAt = ts
 				} else {
-					cfg.Images[i].LastSyncedAt = ""
+					cfg.Images[i].SyncedAt = ""
 				}
 				marked++
 			}
@@ -312,9 +315,9 @@ func newListCmd(opts *options) *cobra.Command {
 
 			switch output {
 			case "table":
-				fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tLAST_SYNCED_AT")
+				fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tCREATED_AT\tSYNCED_AT")
 				for _, img := range items {
-					fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\n", img.Profile, img.EnabledValue(), img.Synced, img.Source, img.Target, img.LastSyncedAt)
+					fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\n", img.Profile, img.EnabledValue(), img.Synced, img.Source, img.Target, img.CreatedAt, img.SyncedAt)
 				}
 			case "json":
 				enc := json.NewEncoder(os.Stdout)

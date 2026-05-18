@@ -38,12 +38,19 @@ profiles:
     registry: registry.cn-shanghai.aliyuncs.com/your-namespace
     username_env: DEST_REGISTRY_USER
     password_env: DEST_REGISTRY_PASSWORD
+remote:
+  repo_url: https://github.com/example-org/example-repo.git
+  ref: main
+  config_path: mirrorpilot.yaml
 images:
   - source: nginx:1.27
     target: mirror/nginx:1.27
     profile: default
     enabled: true
+    created_at: 2026-05-18T00:00:00Z
     synced: false
+    synced_at: ""
+synced_images: []
 ```
 
 ### Legacy compatibility
@@ -61,9 +68,20 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 - `remove`: remove mapping(s)
 - `mark`: set `synced` state manually
 - `list`: list entries (`--all`, `--pending`, `--synced`)
+- `synced`: list synced image records from `synced_images`
 - `validate`: validate config
 - `migrate`: convert `images.list` to YAML
 - `sync`: execute actual mirror sync (CI only)
+- `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
+- `remote fetch`: fetch remote image list and merge into local config
+
+Examples:
+
+```bash
+go run ./cmd/mirrorpilot remote set --repo-url https://github.com/warjiang/MirrorPilot.git --ref main --config-path mirrorpilot.yaml
+go run ./cmd/mirrorpilot remote fetch --merge
+go run ./cmd/mirrorpilot synced --output table
+```
 
 `sync` is restricted to CI (`CI=true`) so real sync work stays in remote workflow.
 
