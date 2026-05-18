@@ -49,7 +49,7 @@ jobs:
 
           ASSET_NAME=$(gh release view "$CLI_VERSION" --repo "$GITHUB_REPOSITORY" --json assets \
             --jq '.assets[].name' \
-            | grep -E '^sync-images_.*_Linux_(x86_64|amd64)\.tar\.gz$' \
+            | grep -E '^sync-images_.*_linux_(x86_64|amd64)\.tar\.gz$' \
             | head -n1)
 
           if [ -z "${ASSET_NAME}" ]; then
