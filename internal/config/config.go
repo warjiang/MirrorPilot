@@ -176,7 +176,7 @@ func Validate(cfg Config) []error {
 	}
 	sort.Strings(profileNames)
 
-	seen := map[string]struct{}{}
+	seenEnabled := map[string]struct{}{}
 	for idx, img := range cfg.Images {
 		if strings.TrimSpace(img.Source) == "" {
 			errs = append(errs, fmt.Errorf("images[%d] has empty source", idx))
@@ -191,10 +191,12 @@ func Validate(cfg Config) []error {
 			errs = append(errs, fmt.Errorf("images[%d] references missing profile %q", idx, img.Profile))
 		}
 		key := img.Profile + "|" + img.Source + "|" + img.Target
-		if _, ok := seen[key]; ok {
-			errs = append(errs, fmt.Errorf("duplicate image entry %q", key))
+		if img.EnabledValue() {
+			if _, ok := seenEnabled[key]; ok {
+				errs = append(errs, fmt.Errorf("duplicate enabled image entry %q", key))
+			}
+			seenEnabled[key] = struct{}{}
 		}
-		seen[key] = struct{}{}
 
 		if img.LastSyncedAt != "" {
 			if _, err := time.Parse(time.RFC3339, img.LastSyncedAt); err != nil {

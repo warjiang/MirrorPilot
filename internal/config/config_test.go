@@ -49,3 +49,26 @@ func TestValidate(t *testing.T) {
 		t.Fatalf("expected duplicate validation error")
 	}
 }
+
+func TestValidate_AllowsDisabledDuplicates(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Images = []Image{
+		{
+			Source:  "alpine:latest",
+			Target:  "alpine:latest",
+			Profile: DefaultProfile,
+			Enabled: BoolPtr(true),
+		},
+		{
+			Source:  "alpine:latest",
+			Target:  "alpine:latest",
+			Profile: DefaultProfile,
+			Enabled: BoolPtr(false),
+		},
+	}
+
+	errs := Validate(cfg)
+	if len(errs) != 0 {
+		t.Fatalf("expected disabled duplicates to be allowed, got %v", errs)
+	}
+}
