@@ -1,45 +1,71 @@
-name: Sync images
+name: Sync Images
 
 on:
-  # pull_request:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      resync_all:
+        description: "Force full re-sync of all enabled images"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   sync:
-    name: Sync images
+    name: Sync images via CLI
     runs-on: ubuntu-latest
-    # runs-on: johor
-    # runs-on: [self-hosted, Linux, X64, johor]
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     steps:
       - name: Checkout
-        id: checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: 'Set up skopeo'
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up skopeo
         uses: warjiang/setup-skopeo@v0.1.3
         with:
           version: latest
 
-      - name: 'Sync images'
+      - name: Validate config
+        run: go run ./cmd/sync-images validate
+
+      - name: Sync images
+        env:
+          DEST_REGISTRY: ${{ secrets.DEST_REGISTRY != '' && secrets.DEST_REGISTRY || secrets.ALIYUN_REGISTRY }}
+          DEST_REGISTRY_USER: ${{ secrets.DEST_REGISTRY_USER != '' && secrets.DEST_REGISTRY_USER || secrets.ALIYUN_REGISTRY_USER }}
+          DEST_REGISTRY_PASSWORD: ${{ secrets.DEST_REGISTRY_PASSWORD != '' && secrets.DEST_REGISTRY_PASSWORD || secrets.ALIYUN_REGISTRY_PASSWORD }}
+          RESYNC_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.resync_all || false }}
         run: |
-          skopeo --version
-          SHELL_FOLDER=$(pwd)
-          set +e
-          images=$(cat $SHELL_FOLDER/images.list | grep -v '^\s*$' | grep -v '^#')
-          set -e
-          for line in $images; do
-            echo "Start sync $line"
-            origin_image=$(echo $line | awk -F '=>' '{print $1}')
-            target_image=$(echo $line | awk -F '=>' '{print $2}')
-            skopeo copy --multi-arch all --dest-creds \
-              ${{ secrets.ALIYUN_REGISTRY_USER }}:${{ secrets.ALIYUN_REGISTRY_PASSWORD }} \
-              docker://${origin_image} \
-              docker://${{ secrets.ALIYUN_REGISTRY }}/${target_image}
-            echo "Sync $line done"
-            sleep 1
-          done
+          args=""
+          if [ "$RESYNC_ALL" = "true" ]; then
+            args="--all"
+          fi
+          go run ./cmd/sync-images sync $args
+
+      - name: Commit sync status
+        run: |
+          if [ ! -f sync-images.yaml ]; then
+            echo "sync-images.yaml not present, skip status commit"
+            exit 0
+          fi
+
+          if git diff --quiet -- sync-images.yaml; then
+            echo "No status changes to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sync-images.yaml
+          git commit -m "chore(ci): update sync status [skip ci]"
+          git push
