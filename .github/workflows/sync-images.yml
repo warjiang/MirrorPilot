@@ -80,6 +80,8 @@ jobs:
 
       - name: Commit sync status
         run: |
+          rm -f skopeo
+
           changed_config_files=$(git diff --name-only -- mirrorpilot.yaml sync-images.yaml)
           if [ -z "$changed_config_files" ]; then
             echo "No status changes to commit"
@@ -88,6 +90,11 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add mirrorpilot.yaml sync-images.yaml 2>/dev/null || true
+          git add -- $changed_config_files
+          if git diff --cached --quiet; then
+            echo "No staged config changes after git add, skip commit"
+            git status --short
+            exit 0
+          fi
           git commit -m "chore(ci): update sync status [skip ci]"
           git push
