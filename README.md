@@ -70,7 +70,9 @@ go run ./cmd/sync-images migrate --from images.list --to sync-images.yaml
 ## CI behavior
 
 - `push` to `main`: incremental sync (only `enabled=true && synced=false`)
+- sync workflow downloads and runs released CLI binary from GitHub Releases (does not build from source)
 - `workflow_dispatch` with `resync_all=true`: full re-sync (`--all`)
+- `workflow_dispatch` supports `cli_version` to pin a specific released CLI tag; empty means latest release
 - after successful sync, CI updates `synced/last_synced_at` and commits back with `[skip ci]`
 
 ## Release CLI

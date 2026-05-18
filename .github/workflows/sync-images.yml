@@ -11,6 +11,11 @@ on:
         required: false
         default: false
         type: boolean
+      cli_version:
+        description: "CLI release tag to use (for example v0.1.0). Leave empty to use latest."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
@@ -26,18 +31,39 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
       - name: Set up skopeo
         uses: warjiang/setup-skopeo@v0.1.3
         with:
           version: latest
 
+      - name: Download released CLI binary
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLI_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.cli_version || '' }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CLI_VERSION}" ]; then
+            CLI_VERSION=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName -q .tagName)
+          fi
+
+          ASSET_NAME=$(gh release view "$CLI_VERSION" --repo "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[].name' \
+            | grep -E '^sync-images_.*_Linux_(x86_64|amd64)\.tar\.gz$' \
+            | head -n1)
+
+          if [ -z "${ASSET_NAME}" ]; then
+            echo "No Linux amd64 release asset found for tag ${CLI_VERSION}" >&2
+            exit 1
+          fi
+
+          mkdir -p bin
+          gh release download "$CLI_VERSION" --repo "$GITHUB_REPOSITORY" -p "$ASSET_NAME" -D /tmp
+          tar -xzf "/tmp/${ASSET_NAME}" -C bin sync-images
+          chmod +x bin/sync-images
+
       - name: Validate config
-        run: go run ./cmd/sync-images validate
+        run: ./bin/sync-images validate
 
       - name: Sync images
         env:
@@ -50,7 +76,7 @@ jobs:
           if [ "$RESYNC_ALL" = "true" ]; then
             args="--all"
           fi
-          go run ./cmd/sync-images sync $args
+          ./bin/sync-images sync $args
 
       - name: Commit sync status
         run: |
