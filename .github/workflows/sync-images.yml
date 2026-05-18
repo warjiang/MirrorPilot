@@ -37,9 +37,9 @@ jobs:
             origin_image=$(echo $line | awk -F '=>' '{print $1}')
             target_image=$(echo $line | awk -F '=>' '{print $2}')
             skopeo copy --multi-arch all --dest-creds \
-              ${{ secrets.DEST_REGISTRY_USER }}:${{ secrets.DEST_REGISTRY_PASSWORD }} \
+              ${{ secrets.ALIYUN_REGISTRY_USER }}:${{ secrets.ALIYUN_REGISTRY_PASSWORD }} \
               docker://${origin_image} \
-              docker://${{ secrets.DEST_REGISTRY }}/${target_image}
+              docker://${{ secrets.ALIYUN_REGISTRY }}/${target_image}
             echo "Sync $line done"
             sleep 1
           done

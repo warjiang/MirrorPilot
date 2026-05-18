@@ -9,8 +9,8 @@ for line in $images; do
     origin_image=$(echo $line | awk -F '=>' '{print $1}')
     target_image=$(echo $line | awk -F '=>' '{print $2}')
     skopeo copy --dest-creds \
-          ${{ secrets.DEST_REGISTRY_USER }}:${{ secrets.DEST_REGISTRY_PASSWORD }} \
+          ${{ secrets.ALIYUN_REGISTRY_USER }}:${{ secrets.ALIYUN_REGISTRY_PASSWORD }} \
           docker://${origin_image} \
-          docker://${{ secrets.DEST_REGISTRY }}/${target_image}
+          docker://${{ secrets.ALIYUN_REGISTRY }}/${target_image}
     echo "sync $line done"
 done
