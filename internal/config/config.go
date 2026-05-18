@@ -19,9 +19,11 @@ const (
 )
 
 type Config struct {
-	Version  string                     `yaml:"version"`
-	Profiles map[string]RegistryProfile `yaml:"profiles"`
-	Images   []Image                    `yaml:"images"`
+	Version      string                     `yaml:"version"`
+	Remote       RemoteConfig               `yaml:"remote,omitempty"`
+	Profiles     map[string]RegistryProfile `yaml:"profiles"`
+	Images       []Image                    `yaml:"images"`
+	SyncedImages []SyncedImage              `yaml:"synced_images,omitempty"`
 }
 
 type RegistryProfile struct {
@@ -36,8 +38,25 @@ type Image struct {
 	Profile      string `yaml:"profile,omitempty"`
 	Enabled      *bool  `yaml:"enabled,omitempty"`
 	Synced       bool   `yaml:"synced,omitempty"`
+	CreatedAt    string `yaml:"created_at,omitempty"`
+	SyncedAt     string `yaml:"synced_at,omitempty"`
 	LastSyncedAt string `yaml:"last_synced_at,omitempty"`
 	Notes        string `yaml:"notes,omitempty"`
+}
+
+type RemoteConfig struct {
+	RepoURL    string `yaml:"repo_url,omitempty"`
+	Ref        string `yaml:"ref,omitempty"`
+	ConfigPath string `yaml:"config_path,omitempty"`
+}
+
+type SyncedImage struct {
+	Profile      string `yaml:"profile"`
+	Source       string `yaml:"source"`
+	Target       string `yaml:"target"`
+	CreatedAt    string `yaml:"created_at,omitempty"`
+	SyncedAt     string `yaml:"synced_at,omitempty"`
+	LastSyncedAt string `yaml:"last_synced_at,omitempty"`
 }
 
 func (i Image) EnabledValue() bool {
@@ -138,8 +157,65 @@ func Normalize(cfg Config) Config {
 		if cfg.Images[i].Enabled == nil {
 			cfg.Images[i].Enabled = BoolPtr(true)
 		}
+		if cfg.Images[i].SyncedAt == "" && cfg.Images[i].LastSyncedAt != "" {
+			cfg.Images[i].SyncedAt = cfg.Images[i].LastSyncedAt
+		}
+		cfg.Images[i].LastSyncedAt = ""
+		if cfg.Images[i].CreatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, cfg.Images[i].CreatedAt); err == nil {
+				cfg.Images[i].CreatedAt = t.UTC().Format(time.RFC3339)
+			}
+		}
+		if cfg.Images[i].SyncedAt != "" {
+			if t, err := time.Parse(time.RFC3339, cfg.Images[i].SyncedAt); err == nil {
+				cfg.Images[i].SyncedAt = t.UTC().Format(time.RFC3339)
+			}
+		}
 	}
+	for i := range cfg.SyncedImages {
+		if cfg.SyncedImages[i].SyncedAt == "" && cfg.SyncedImages[i].LastSyncedAt != "" {
+			cfg.SyncedImages[i].SyncedAt = cfg.SyncedImages[i].LastSyncedAt
+		}
+		cfg.SyncedImages[i].LastSyncedAt = ""
+	}
+	RefreshSyncedImages(&cfg)
 	return cfg
+}
+
+func RefreshSyncedImages(cfg *Config) {
+	items := make([]SyncedImage, 0, len(cfg.Images))
+	seen := map[string]struct{}{}
+	for _, img := range cfg.Images {
+		if !img.Synced {
+			continue
+		}
+		p := img.Profile
+		if p == "" {
+			p = DefaultProfile
+		}
+		key := p + "|" + img.Source + "|" + img.Target
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		items = append(items, SyncedImage{
+			Profile:   p,
+			Source:    img.Source,
+			Target:    img.Target,
+			CreatedAt: img.CreatedAt,
+			SyncedAt:  img.SyncedAt,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].Profile != items[j].Profile {
+			return items[i].Profile < items[j].Profile
+		}
+		if items[i].Source != items[j].Source {
+			return items[i].Source < items[j].Source
+		}
+		return items[i].Target < items[j].Target
+	})
+	cfg.SyncedImages = items
 }
 
 func EnsureDefaultProfile(cfg *Config) {
@@ -198,9 +274,36 @@ func Validate(cfg Config) []error {
 			seenEnabled[key] = struct{}{}
 		}
 
-		if img.LastSyncedAt != "" {
-			if _, err := time.Parse(time.RFC3339, img.LastSyncedAt); err != nil {
-				errs = append(errs, fmt.Errorf("images[%d] has invalid last_synced_at %q", idx, img.LastSyncedAt))
+		if img.CreatedAt != "" {
+			if _, err := time.Parse(time.RFC3339, img.CreatedAt); err != nil {
+				errs = append(errs, fmt.Errorf("images[%d] has invalid created_at %q", idx, img.CreatedAt))
+			}
+		}
+		if img.SyncedAt != "" {
+			if _, err := time.Parse(time.RFC3339, img.SyncedAt); err != nil {
+				errs = append(errs, fmt.Errorf("images[%d] has invalid synced_at %q", idx, img.SyncedAt))
+			}
+		}
+	}
+
+	for idx, item := range cfg.SyncedImages {
+		if strings.TrimSpace(item.Profile) == "" {
+			errs = append(errs, fmt.Errorf("synced_images[%d] has empty profile", idx))
+		}
+		if strings.TrimSpace(item.Source) == "" {
+			errs = append(errs, fmt.Errorf("synced_images[%d] has empty source", idx))
+		}
+		if strings.TrimSpace(item.Target) == "" {
+			errs = append(errs, fmt.Errorf("synced_images[%d] has empty target", idx))
+		}
+		if item.CreatedAt != "" {
+			if _, err := time.Parse(time.RFC3339, item.CreatedAt); err != nil {
+				errs = append(errs, fmt.Errorf("synced_images[%d] has invalid created_at %q", idx, item.CreatedAt))
+			}
+		}
+		if item.SyncedAt != "" {
+			if _, err := time.Parse(time.RFC3339, item.SyncedAt); err != nil {
+				errs = append(errs, fmt.Errorf("synced_images[%d] has invalid synced_at %q", idx, item.SyncedAt))
 			}
 		}
 	}
@@ -254,10 +357,11 @@ func loadLegacy(path string) (Config, error) {
 		}
 
 		cfg.Images = append(cfg.Images, Image{
-			Source:  source,
-			Target:  target,
-			Profile: DefaultProfile,
-			Enabled: BoolPtr(enabled),
+			Source:    source,
+			Target:    target,
+			Profile:   DefaultProfile,
+			Enabled:   BoolPtr(enabled),
+			CreatedAt: time.Now().UTC().Format(time.RFC3339),
 		})
 	}
 	return cfg, nil

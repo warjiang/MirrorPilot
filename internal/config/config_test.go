@@ -72,3 +72,22 @@ func TestValidate_AllowsDisabledDuplicates(t *testing.T) {
 		t.Fatalf("expected disabled duplicates to be allowed, got %v", errs)
 	}
 }
+
+func TestNormalizeBuildsSyncedImages(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Images = []Image{
+		{Source: "nginx:1.27", Target: "mirror/nginx:1.27", Profile: DefaultProfile, Enabled: BoolPtr(true), Synced: true, CreatedAt: "2026-05-17T00:00:00Z", SyncedAt: "2026-05-18T00:00:00Z"},
+		{Source: "redis:7", Target: "mirror/redis:7", Profile: DefaultProfile, Enabled: BoolPtr(true), Synced: false},
+	}
+
+	norm := Normalize(cfg)
+	if len(norm.SyncedImages) != 1 {
+		t.Fatalf("expected 1 synced image, got %d", len(norm.SyncedImages))
+	}
+	if norm.SyncedImages[0].Source != "nginx:1.27" {
+		t.Fatalf("unexpected synced image source: %s", norm.SyncedImages[0].Source)
+	}
+	if norm.SyncedImages[0].SyncedAt != "2026-05-18T00:00:00Z" {
+		t.Fatalf("unexpected synced_at: %s", norm.SyncedImages[0].SyncedAt)
+	}
+}
