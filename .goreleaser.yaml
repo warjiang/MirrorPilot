@@ -1,6 +1,6 @@
 version: 2
 
-project_name: sync-images
+project_name: MirrorPilot
 
 before:
   hooks:
@@ -8,9 +8,9 @@ before:
     - go test ./...
 
 builds:
-  - id: sync-images
-    main: ./cmd/sync-images
-    binary: sync-images
+  - id: mirrorpilot
+    main: ./cmd/mirrorpilot
+    binary: mirrorpilot
     env:
       - CGO_ENABLED=0
     goos:

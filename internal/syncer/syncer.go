@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/warjiang/sync-images/internal/config"
+	"github.com/warjiang/MirrorPilot/internal/config"
 )
 
 type Options struct {

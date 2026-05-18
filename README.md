@@ -1,7 +1,7 @@
-# sync-images
+# MirrorPilot
 
 A fork-friendly image mirror repo with:
-- a Go CLI (`sync-images`) to manage mirror entries and sync state
+- a Go CLI (`mirrorpilot`) to manage mirror entries and sync state
 - GitHub Actions to run real sync jobs in CI only
 - optional migration from legacy `images.list` to YAML
 
@@ -15,21 +15,21 @@ A fork-friendly image mirror repo with:
 2. Validate config:
 
 ```bash
-go run ./cmd/sync-images validate
+go run ./cmd/mirrorpilot validate
 ```
 
 3. Manage entries with CLI:
 
 ```bash
-go run ./cmd/sync-images add --source nginx:1.27 --target mirror/nginx:1.27
-go run ./cmd/sync-images list --all
+go run ./cmd/mirrorpilot add --source nginx:1.27 --target mirror/nginx:1.27
+go run ./cmd/mirrorpilot list --all
 ```
 
-4. Push to `main` to trigger CI sync. CI calls CLI `sync` and commits status updates back to `sync-images.yaml`.
+4. Push to `main` to trigger CI sync. CI calls CLI `sync` and commits status updates back to config YAML.
 
 ## Config
 
-Primary config file: `sync-images.yaml`
+Primary config file: `mirrorpilot.yaml`
 
 ```yaml
 version: v1
@@ -48,11 +48,11 @@ images:
 
 ### Legacy compatibility
 
-If `sync-images.yaml` does not exist, CLI reads legacy `images.list`.
+If `mirrorpilot.yaml` does not exist, CLI falls back to legacy `sync-images.yaml`, then `images.list`.
 You can migrate with:
 
 ```bash
-go run ./cmd/sync-images migrate --from images.list --to sync-images.yaml
+go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 ```
 
 ## CLI commands

@@ -1,4 +1,4 @@
-module github.com/warjiang/sync-images
+module github.com/warjiang/MirrorPilot
 
 go 1.22
 
