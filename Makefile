@@ -1,4 +1,4 @@
-BINARY=sync-images
+BINARY=mirrorpilot
 
 .PHONY: tidy build test run lint
 
@@ -6,13 +6,13 @@ tidy:
 	go mod tidy
 
 build:
-	go build -o bin/$(BINARY) ./cmd/sync-images
+	go build -o bin/$(BINARY) ./cmd/mirrorpilot
 
 test:
 	go test ./...
 
 run:
-	go run ./cmd/sync-images
+	go run ./cmd/mirrorpilot
 
 lint:
 	go vet ./...

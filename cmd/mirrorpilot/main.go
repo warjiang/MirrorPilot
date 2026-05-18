@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/warjiang/sync-images/internal/cli"
+	"github.com/warjiang/MirrorPilot/internal/cli"
 )
 
 func main() {

@@ -12,7 +12,8 @@ import (
 )
 
 const (
-	DefaultConfigPath = "sync-images.yaml"
+	DefaultConfigPath = "mirrorpilot.yaml"
+	LegacyConfigPath  = "sync-images.yaml"
 	LegacyListPath    = "images.list"
 	DefaultProfile    = "default"
 )
@@ -79,6 +80,16 @@ func Load(configPath string) (LoadedConfig, error) {
 			return LoadedConfig{}, err
 		}
 		return LoadedConfig{Path: configPath, Config: cfg}, nil
+	}
+
+	if configPath == DefaultConfigPath {
+		if _, err := os.Stat(LegacyConfigPath); err == nil {
+			cfg, err := loadYAML(LegacyConfigPath)
+			if err != nil {
+				return LoadedConfig{}, err
+			}
+			return LoadedConfig{Path: LegacyConfigPath, Config: cfg}, nil
+		}
 	}
 
 	legacyPath := LegacyListPath

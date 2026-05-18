@@ -49,7 +49,7 @@ jobs:
 
           ASSET_NAME=$(gh release view "$CLI_VERSION" --repo "$GITHUB_REPOSITORY" --json assets \
             --jq '.assets[].name' \
-            | grep -E '^sync-images_.*_linux_(x86_64|amd64)\.tar\.gz$' \
+            | grep -E '^MirrorPilot_.*_linux_(x86_64|amd64)\.tar\.gz$' \
             | head -n1)
 
           if [ -z "${ASSET_NAME}" ]; then
@@ -59,11 +59,11 @@ jobs:
 
           mkdir -p bin
           gh release download "$CLI_VERSION" --repo "$GITHUB_REPOSITORY" -p "$ASSET_NAME" -D /tmp
-          tar -xzf "/tmp/${ASSET_NAME}" -C bin sync-images
-          chmod +x bin/sync-images
+          tar -xzf "/tmp/${ASSET_NAME}" -C bin mirrorpilot
+          chmod +x bin/mirrorpilot
 
       - name: Validate config
-        run: ./bin/sync-images validate
+        run: ./bin/mirrorpilot validate
 
       - name: Sync images
         env:
@@ -76,22 +76,18 @@ jobs:
           if [ "$RESYNC_ALL" = "true" ]; then
             args="--all"
           fi
-          ./bin/sync-images sync $args
+          ./bin/mirrorpilot sync $args
 
       - name: Commit sync status
         run: |
-          if [ ! -f sync-images.yaml ]; then
-            echo "sync-images.yaml not present, skip status commit"
-            exit 0
-          fi
-
-          if git diff --quiet -- sync-images.yaml; then
+          changed_config_files=$(git diff --name-only -- mirrorpilot.yaml sync-images.yaml)
+          if [ -z "$changed_config_files" ]; then
             echo "No status changes to commit"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add sync-images.yaml
+          git add mirrorpilot.yaml sync-images.yaml 2>/dev/null || true
           git commit -m "chore(ci): update sync status [skip ci]"
           git push

@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/warjiang/sync-images/internal/config"
-	"github.com/warjiang/sync-images/internal/syncer"
+	"github.com/warjiang/MirrorPilot/internal/config"
+	"github.com/warjiang/MirrorPilot/internal/syncer"
 )
 
 type options struct {
@@ -23,7 +23,8 @@ type options struct {
 func NewRootCmd() *cobra.Command {
 	opts := &options{}
 	cmd := &cobra.Command{
-		Use:           "sync-images",
+		Use:           "mirrorpilot",
+		Aliases:       []string{"sync-images"},
 		Short:         "Manage and sync container image mirrors",
 		SilenceUsage:  true,
 		SilenceErrors: true,
