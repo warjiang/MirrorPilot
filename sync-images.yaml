@@ -30,127 +30,127 @@ images:
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: golang:1.20.0
       target: golang:1.20.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: bitnami/kubectl:latest
       target: bitnami-kubectl:latest
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: cfssl/cfssl:latest
       target: cfssl-cfssl:latest
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-dashboard-api:v0.1.0
       target: karmada-karmada-dashboard-api:v0.1.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-dashboard-web:v0.1.0
       target: karmada-karmada-dashboard-web:v0.1.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-aggregated-apiserver:v1.8.0
       target: karmada-karmada-aggregated-apiserver:v1.8.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-controller-manager:v1.8.0
       target: karmada-karmada-controller-manager:v1.8.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-metrics-adapter:v1.8.0
       target: karmada-karmada-metrics-adapter:v1.8.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-scheduler:v1.8.0
       target: karmada-karmada-scheduler:v1.8.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: karmada/karmada-webhook:v1.8.0
       target: karmada-karmada-webhook:v1.8.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: registry.k8s.io/kube-controller-manager:v1.25.4
       target: kube-controller-manager:v1.25.4
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: registry.k8s.io/etcd:3.5.9-0
       target: etcd:3.5.9-0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: registry.k8s.io/kube-apiserver:v1.25.4
       target: kube-apiserver:v1.25.4
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: nvidia/cuda:11.0.3-base
       target: nvidia-cuda:11.0.3-base
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: lmsysorg/sglang:v0.4.3.post4-cu125
       target: lmsysorg-sglang:v0.4.3.post4-cu125
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: lmsysorg/sglang:latest
       target: lmsysorg-sglang:latest
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: nginx/nginx-ingress:4.0-alpine
       target: nginx-nginx-ingress:4.0-alpine
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: nginx/nginx-ingress:4.0.1-ubi
       target: nginx-nginx-ingress:4.0.1-ubi
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: nginx/nginx-ingress:4.0.1-20250309-ubi
       target: nginx-nginx-ingress:4.0.1-20250309-ubi
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: nginx/nginx-ingress:4.0
       target: nginx-nginx-ingress:4.0
       profile: default
       enabled: true
       synced: true
-      last_synced_at: "2026-05-18T09:44:19Z"
+      synced_at: "2026-05-18T09:44:19Z"
     - source: quay.io/minio/minio:RELEASE.2025-03-12T18-04-18Z
       target: minio/minio:RELEASE.2025-03-12T18-04-18Z
       profile: default
@@ -1383,3 +1383,96 @@ images:
       target: gitlab-gitlab-ce:19.0.0-ce.0
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-21T16:03:38Z"
+      synced_at: "2026-05-21T16:03:38Z"
+synced_images:
+    - profile: default
+      source: bitnami/kubectl:latest
+      target: bitnami-kubectl:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: cfssl/cfssl:latest
+      target: cfssl-cfssl:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: gitlab/gitlab-ce:19.0.0-ce.0
+      target: gitlab-gitlab-ce:19.0.0-ce.0
+      created_at: "2026-05-21T16:03:38Z"
+      synced_at: "2026-05-21T16:03:38Z"
+    - profile: default
+      source: golang:1.20.0
+      target: golang:1.20.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-aggregated-apiserver:v1.8.0
+      target: karmada-karmada-aggregated-apiserver:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-controller-manager:v1.8.0
+      target: karmada-karmada-controller-manager:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-dashboard-api:v0.1.0
+      target: karmada-karmada-dashboard-api:v0.1.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-dashboard-web:v0.1.0
+      target: karmada-karmada-dashboard-web:v0.1.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-metrics-adapter:v1.8.0
+      target: karmada-karmada-metrics-adapter:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-scheduler:v1.8.0
+      target: karmada-karmada-scheduler:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-webhook:v1.8.0
+      target: karmada-karmada-webhook:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: lmsysorg/sglang:latest
+      target: lmsysorg-sglang:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: lmsysorg/sglang:v0.4.3.post4-cu125
+      target: lmsysorg-sglang:v0.4.3.post4-cu125
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0
+      target: nginx-nginx-ingress:4.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0-alpine
+      target: nginx-nginx-ingress:4.0-alpine
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0.1-20250309-ubi
+      target: nginx-nginx-ingress:4.0.1-20250309-ubi
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0.1-ubi
+      target: nginx-nginx-ingress:4.0.1-ubi
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: node:18.19.0-buster
+      target: node:18.19.0-buster
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nvidia/cuda:11.0.3-base
+      target: nvidia-cuda:11.0.3-base
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/etcd:3.5.9-0
+      target: etcd:3.5.9-0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/kube-apiserver:v1.25.4
+      target: kube-apiserver:v1.25.4
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/kube-controller-manager:v1.25.4
+      target: kube-controller-manager:v1.25.4
+      synced_at: "2026-05-18T09:44:19Z"
