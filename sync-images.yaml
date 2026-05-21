@@ -1380,6 +1380,6 @@ images:
       profile: default
       enabled: false
     - source: gitlab/gitlab-ce:19.0.0-ce.0
-      target: gitlab/gitlab-ce:19.0.0-ce.0
+      target: gitlab-gitlab-ce:19.0.0-ce.0
       profile: default
       enabled: true
