@@ -5,6 +5,10 @@ profiles:
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
+      target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
+      profile: default
+      enabled: true
     - source: alpine:3.19
       target: alpine:3.19
       profile: default
