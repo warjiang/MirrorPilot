@@ -9,6 +9,9 @@ images:
       target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-23T06:30:12Z"
+      synced_at: "2026-05-23T06:30:12Z"
     - source: alpine:3.19
       target: alpine:3.19
       profile: default
@@ -1399,6 +1402,11 @@ synced_images:
       source: cfssl/cfssl:latest
       target: cfssl-cfssl:latest
       synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
+      target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
+      created_at: "2026-05-23T06:30:12Z"
+      synced_at: "2026-05-23T06:30:12Z"
     - profile: default
       source: gitlab/gitlab-ce:19.0.0-ce.0
       target: gitlab-gitlab-ce:19.0.0-ce.0
