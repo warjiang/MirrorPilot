@@ -1476,7 +1476,3 @@ synced_images:
       source: registry.k8s.io/kube-controller-manager:v1.25.4
       target: kube-controller-manager:v1.25.4
       synced_at: "2026-05-18T09:44:19Z"
-    - profile: default
-      source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
-      target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
-      
