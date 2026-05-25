@@ -1,10 +1,14 @@
-version: v1
+pversion: v1
 profiles:
     default:
         registry: registry.example.com/namespace
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: node:20-alpine
+      target: node:20-alpine
+      profile: default
+      enabled: true
     - source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
       target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
       profile: default
