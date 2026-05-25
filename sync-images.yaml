@@ -1,4 +1,4 @@
-pversion: v1
+version: v1
 profiles:
     default:
         registry: registry.example.com/namespace
@@ -9,6 +9,9 @@ images:
       target: node:20-alpine
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-25T03:19:43Z"
+      synced_at: "2026-05-25T03:19:43Z"
     - source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
       target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
       profile: default
@@ -1476,6 +1479,11 @@ synced_images:
       source: node:18.19.0-buster
       target: node:18.19.0-buster
       synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: node:20-alpine
+      target: node:20-alpine
+      created_at: "2026-05-25T03:19:43Z"
+      synced_at: "2026-05-25T03:19:43Z"
     - profile: default
       source: nvidia/cuda:11.0.3-base
       target: nvidia-cuda:11.0.3-base
