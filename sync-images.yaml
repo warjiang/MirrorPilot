@@ -5,6 +5,10 @@ profiles:
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: nginx:alpine
+      target: nginx:alpine
+      profile: default
+      enabled: true
     - source: node:20-alpine
       target: node:20-alpine
       profile: default
