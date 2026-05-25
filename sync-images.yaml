@@ -9,6 +9,9 @@ images:
       target: nginx:alpine
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-25T03:58:14Z"
+      synced_at: "2026-05-25T03:58:14Z"
     - source: node:20-alpine
       target: node:20-alpine
       profile: default
@@ -1479,6 +1482,11 @@ synced_images:
       source: nginx/nginx-ingress:4.0.1-ubi
       target: nginx-nginx-ingress:4.0.1-ubi
       synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx:alpine
+      target: nginx:alpine
+      created_at: "2026-05-25T03:58:14Z"
+      synced_at: "2026-05-25T03:58:14Z"
     - profile: default
       source: node:18.19.0-buster
       target: node:18.19.0-buster
