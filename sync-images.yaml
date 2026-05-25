@@ -5,6 +5,14 @@ profiles:
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: ghcr.io/multica-ai/multica-web:v0.3.6
+      target: multica-ai-multica-web:v0.3.6
+      profile: default
+      enabled: true
+    - source: ghcr.io/multica-ai/multica-backend:v0.3.6
+      target: multica-ai-multica-backend:v0.3.6
+      profile: default
+      enabled: true
     - source: nginx:alpine
       target: nginx:alpine
       profile: default
