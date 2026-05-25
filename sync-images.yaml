@@ -9,10 +9,16 @@ images:
       target: multica-ai-multica-web:v0.3.6
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
     - source: ghcr.io/multica-ai/multica-backend:v0.3.6
       target: multica-ai-multica-backend:v0.3.6
       profile: default
       enabled: true
+      synced: true
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
     - source: nginx:alpine
       target: nginx:alpine
       profile: default
@@ -1429,6 +1435,16 @@ synced_images:
       target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
       created_at: "2026-05-23T06:30:12Z"
       synced_at: "2026-05-23T06:30:12Z"
+    - profile: default
+      source: ghcr.io/multica-ai/multica-backend:v0.3.6
+      target: multica-ai-multica-backend:v0.3.6
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
+    - profile: default
+      source: ghcr.io/multica-ai/multica-web:v0.3.6
+      target: multica-ai-multica-web:v0.3.6
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
     - profile: default
       source: gitlab/gitlab-ce:19.0.0-ce.0
       target: gitlab-gitlab-ce:19.0.0-ce.0
