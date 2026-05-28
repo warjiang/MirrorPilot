@@ -5,6 +5,10 @@ profiles:
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: ghcr.io/warjiang/huobao-canvas:v0.1.2
+      target: warjiang-huobao-canvas:v0.1.2
+      profile: default
+      enabled: true
     - source: ghcr.io/multica-ai/multica-web:v0.3.6
       target: multica-ai-multica-web:v0.3.6
       profile: default
