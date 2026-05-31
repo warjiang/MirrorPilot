@@ -1,11 +1,7 @@
 version: v1
-remote:
-    repo_url: git@github.com:warjiang/MirrorPilot.git
-    ref: main
-    config_path: mirrorpilot.yaml
 profiles:
     default:
-        registry: registry.example.com/namespace
+        registry: crpi-a01fov5fxhl285uu.cn-shanghai.personal.cr.aliyuncs.com/warjiang
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
@@ -444,6 +440,10 @@ images:
       enabled: false
     - source: jitesoft/kubectl:v1.28
       target: jitesoft/kubectl:v1.28
+      profile: default
+      enabled: false
+    - source: alpine:latest
+      target: alpine:latest
       profile: default
       enabled: false
     - source: alpine/git
@@ -1042,6 +1042,10 @@ images:
       target: cloudflare/cloudflared:2025.5.0
       profile: default
       enabled: false
+    - source: cloudflare/cloudflared:latest
+      target: cloudflare/cloudflared:latest
+      profile: default
+      enabled: false
     - source: kennethreitz/httpbin:latest
       target: kennethreitz/httpbin:latest
       profile: default
@@ -1124,6 +1128,66 @@ images:
       enabled: false
     - source: gcr.io/k8s-staging-sig-storage/nfs-subdir-external-provisioner:v4.0.0
       target: k8s-staging-sig-storage/nfs-subdir-external-provisioner:v4.0.0
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-gateway:latest
+      target: ss1917/codo-gateway:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-frontend:latest
+      target: ss1917/codo-frontend:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-admin:latest
+      target: ss1917/codo-admin:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cmdb:latest
+      target: ss1917/codo-cmdb:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-api:latest
+      target: ss1917/codo-flow-api:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-loop:latest
+      target: ss1917/codo-flow-loop:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-queue:latest
+      target: ss1917/codo-flow-queue:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-task-scheduler:latest
+      target: ss1917/codo-flow-task-scheduler:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-exec-task:latest
+      target: ss1917/codo-exec-task:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-task-log:latest
+      target: ss1917/flow-task-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-agent-log:latest
+      target: ss1917/flow-agent-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-agent-server:latest
+      target: ss1917/codo-agent-server:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cnmp:latest
+      target: ss1917/codo-cnmp:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-notice:latest
+      target: ss1917/codo-notice:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-k2:latest
+      target: ss1917/codo-k2:latest
       profile: default
       enabled: false
     - source: quay.io/helmpack/chart-testing:v3.12.0
@@ -1385,16 +1449,6 @@ images:
       synced: true
       created_at: "2026-05-21T16:03:38Z"
       synced_at: "2026-05-21T16:03:38Z"
-    - source: mcr.microsoft.com/playwright:v1.60.0-jammy
-      target: playwright:v1.60.0-jammy
-      profile: default
-      enabled: true
-      created_at: "2026-05-31T15:45:01Z"
-    - source: curlimages/curl:8.8.0
-      target: curlimages-curl:8.8.0
-      profile: default
-      enabled: true
-      created_at: "2026-05-31T15:45:25Z"
 synced_images:
     - profile: default
       source: bitnami/kubectl:latest
