@@ -107,7 +107,7 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 - `mark`: set `synced` state manually
 - `list`: list entries (`--all`, `--pending`, `--synced`)
 - `synced`: list synced image records from `synced_images`
-- `search`: full-screen TUI search for image entries
+- `search`: full-screen table TUI (`/` to enter vim-like search mode)
 - `validate`: validate config
 - `migrate`: convert `images.list` to YAML
 - `sync`: execute actual mirror sync (CI only)
@@ -131,7 +131,8 @@ go run ./cmd/mirrorpilot search
 go run ./cmd/mirrorpilot synced --output table
 ```
 
-`list` and `synced` now include `full_source` and `full_target` fields (table/json/yaml) so you can see resolved full image paths directly.
+`list` and `synced` hide `full_source` and `full_target` by default. Use `--full-paths` when you want to include them.
+`synced --output table` renders a bordered table layout for easier scanning in terminal.
 
 `sync` is restricted to CI (`CI=true`) so real sync work stays in remote workflow.
 
