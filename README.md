@@ -69,19 +69,27 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 - `mark`: set `synced` state manually
 - `list`: list entries (`--all`, `--pending`, `--synced`)
 - `synced`: list synced image records from `synced_images`
+- `search`: full-screen TUI search for image entries
 - `validate`: validate config
 - `migrate`: convert `images.list` to YAML
 - `sync`: execute actual mirror sync (CI only)
 - `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
 - `remote fetch`: fetch remote image list and merge into local config
+- `remote check`: verify remote repo read/write readiness
+- `remote push-config`: commit and push local config to remote repo
 
 Examples:
 
 ```bash
 go run ./cmd/mirrorpilot remote set --repo-url https://github.com/warjiang/MirrorPilot.git --ref main --config-path mirrorpilot.yaml
 go run ./cmd/mirrorpilot remote fetch --merge
+go run ./cmd/mirrorpilot remote check
+go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
+go run ./cmd/mirrorpilot search
 go run ./cmd/mirrorpilot synced --output table
 ```
+
+`list` and `synced` now include `full_source` and `full_target` fields (table/json/yaml) so you can see resolved full image paths directly.
 
 `sync` is restricted to CI (`CI=true`) so real sync work stays in remote workflow.
 
