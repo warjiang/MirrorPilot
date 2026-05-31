@@ -48,11 +48,6 @@ func (Runner) Run(cfg *config.Config, opts Options) ([]Result, error) {
 		return nil, fmt.Errorf("profile %q not found", opts.Profile)
 	}
 	registry := strings.TrimRight(profile.Registry, "/")
-	if opts.Profile == config.DefaultProfile {
-		if envRegistry := strings.TrimSpace(os.Getenv("DEST_REGISTRY")); envRegistry != "" {
-			registry = strings.TrimRight(envRegistry, "/")
-		}
-	}
 	if registry == "" {
 		return nil, fmt.Errorf("profile %q registry is empty", opts.Profile)
 	}

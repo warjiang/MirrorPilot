@@ -10,9 +10,10 @@ A fork-friendly image mirror repo with:
 Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues from older Go toolchains.
 
 1. Configure repository secrets:
-   - `DEST_REGISTRY` (for example `registry.cn-shanghai.aliyuncs.com/<namespace>`)
    - `DEST_REGISTRY_USER`
    - `DEST_REGISTRY_PASSWORD`
+
+   Target registry is configured in `profiles.<name>.registry` inside config file.
 
 2. Validate config:
 
@@ -57,6 +58,38 @@ images:
     synced: false
     synced_at: ""
 synced_images: []
+```
+
+### Multiple profiles and credentials
+
+Each profile should point to its own credential env names. During `sync`, the CLI reads `username_env/password_env` from the image's selected `profile`.
+
+```yaml
+profiles:
+  default:
+    registry: registry-a.example.com/team-a
+    username_env: REG_A_USER
+    password_env: REG_A_PASS
+  team_b:
+    registry: registry-b.example.com/team-b
+    username_env: REG_B_USER
+    password_env: REG_B_PASS
+images:
+  - source: nginx:1.27
+    target: mirror/nginx:1.27
+    profile: default
+  - source: redis:7
+    target: mirror/redis:7
+    profile: team_b
+```
+
+Environment variables in CI/local runtime:
+
+```bash
+export REG_A_USER=xxx
+export REG_A_PASS=xxx
+export REG_B_USER=yyy
+export REG_B_PASS=yyy
 ```
 
 ### Legacy migration
