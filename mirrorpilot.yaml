@@ -1,0 +1,1586 @@
+version: v1
+profiles:
+    default:
+        registry: crpi-a01fov5fxhl285uu.cn-shanghai.personal.cr.aliyuncs.com/warjiang
+        username_env: DEST_REGISTRY_USER
+        password_env: DEST_REGISTRY_PASSWORD
+images:
+    - source: warjiang/lastbeat:0.1.6
+      target: warjiang-lastbeat:0.1.6
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-29T10:55:16Z"
+      synced_at: "2026-05-29T10:55:16Z"
+    - source: warjiang/lastbeat:0.1.5
+      target: warjiang-lastbeat:0.1.5
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-29T10:34:38Z"
+      synced_at: "2026-05-29T10:34:38Z"
+    - source: warjiang/lastbeat:0.1.4
+      target: warjiang-lastbeat:0.1.4
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-29T05:37:17Z"
+      synced_at: "2026-05-29T05:37:17Z"
+    - source: ghcr.io/warjiang/huobao-canvas:v0.1.2
+      target: warjiang-huobao-canvas:v0.1.2
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-28T17:30:34Z"
+      synced_at: "2026-05-28T17:30:34Z"
+    - source: ghcr.io/multica-ai/multica-web:v0.3.6
+      target: multica-ai-multica-web:v0.3.6
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
+    - source: ghcr.io/multica-ai/multica-backend:v0.3.6
+      target: multica-ai-multica-backend:v0.3.6
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
+    - source: nginx:alpine
+      target: nginx:alpine
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-25T03:58:14Z"
+      synced_at: "2026-05-25T03:58:14Z"
+    - source: node:20-alpine
+      target: node:20-alpine
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-25T03:19:43Z"
+      synced_at: "2026-05-25T03:19:43Z"
+    - source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
+      target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-23T06:30:12Z"
+      synced_at: "2026-05-23T06:30:12Z"
+    - source: alpine:3.19
+      target: alpine:3.19
+      profile: default
+      enabled: false
+    - source: mysql:8.0.32
+      target: mysql:8.0.32
+      profile: default
+      enabled: false
+    - source: semitechnologies/weaviate:1.23.0
+      target: semitechnologies-weaviate:1.23.0
+      profile: default
+      enabled: false
+    - source: redis:6-alpine
+      target: redis:6-alpine
+      profile: default
+      enabled: false
+    - source: warjiang/doc-solver:canary
+      target: ai-hermes/doc-solver:canary
+      profile: default
+      enabled: false
+    - source: node:18.19.0-buster
+      target: node:18.19.0-buster
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: golang:1.20.0
+      target: golang:1.20.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: bitnami/kubectl:latest
+      target: bitnami-kubectl:latest
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: cfssl/cfssl:latest
+      target: cfssl-cfssl:latest
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-dashboard-api:v0.1.0
+      target: karmada-karmada-dashboard-api:v0.1.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-dashboard-web:v0.1.0
+      target: karmada-karmada-dashboard-web:v0.1.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-aggregated-apiserver:v1.8.0
+      target: karmada-karmada-aggregated-apiserver:v1.8.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-controller-manager:v1.8.0
+      target: karmada-karmada-controller-manager:v1.8.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-metrics-adapter:v1.8.0
+      target: karmada-karmada-metrics-adapter:v1.8.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-scheduler:v1.8.0
+      target: karmada-karmada-scheduler:v1.8.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: karmada/karmada-webhook:v1.8.0
+      target: karmada-karmada-webhook:v1.8.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: registry.k8s.io/kube-controller-manager:v1.25.4
+      target: kube-controller-manager:v1.25.4
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: registry.k8s.io/etcd:3.5.9-0
+      target: etcd:3.5.9-0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: registry.k8s.io/kube-apiserver:v1.25.4
+      target: kube-apiserver:v1.25.4
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: nvidia/cuda:11.0.3-base
+      target: nvidia-cuda:11.0.3-base
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: lmsysorg/sglang:v0.4.3.post4-cu125
+      target: lmsysorg-sglang:v0.4.3.post4-cu125
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: lmsysorg/sglang:latest
+      target: lmsysorg-sglang:latest
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: nginx/nginx-ingress:4.0-alpine
+      target: nginx-nginx-ingress:4.0-alpine
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: nginx/nginx-ingress:4.0.1-ubi
+      target: nginx-nginx-ingress:4.0.1-ubi
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: nginx/nginx-ingress:4.0.1-20250309-ubi
+      target: nginx-nginx-ingress:4.0.1-20250309-ubi
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: nginx/nginx-ingress:4.0
+      target: nginx-nginx-ingress:4.0
+      profile: default
+      enabled: true
+      synced: true
+      synced_at: "2026-05-18T09:44:19Z"
+    - source: quay.io/minio/minio:RELEASE.2025-03-12T18-04-18Z
+      target: minio/minio:RELEASE.2025-03-12T18-04-18Z
+      profile: default
+      enabled: false
+    - source: golang:alpine
+      target: golang:alpine
+      profile: default
+      enabled: false
+    - source: alpine:latest
+      target: alpine:latest
+      profile: default
+      enabled: false
+    - source: datacore/alpine-glibc:2.31
+      target: datacore/alpine-glibc:2.31
+      profile: default
+      enabled: false
+    - source: ubuntu:20.04
+      target: ubuntu:20.04
+      profile: default
+      enabled: false
+    - source: ubuntu:22.04
+      target: ubuntu:22.04
+      profile: default
+      enabled: false
+    - source: ubuntu:24.04
+      target: ubuntu:24.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-cudnn-devel-ubuntu20.04
+      target: nvidia/cuda:12.8.1-cudnn-devel-ubuntu20.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+      target: nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+      target: nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-devel-ubuntu20.04
+      target: nvidia/cuda:12.8.1-devel-ubuntu20.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-devel-ubuntu22.04
+      target: nvidia/cuda:12.8.1-devel-ubuntu22.04
+      profile: default
+      enabled: false
+    - source: nvidia/cuda:12.8.1-devel-ubuntu24.04
+      target: nvidia/cuda:12.8.1-devel-ubuntu24.04
+      profile: default
+      enabled: false
+    - source: kindest/node:v1.29.2
+      target: kindest/node:v1.29.2
+      profile: default
+      enabled: false
+    - source: langgenius/dify-sandbox:0.2.10
+      target: langgenius/dify-sandbox:0.2.10
+      profile: default
+      enabled: false
+    - source: ubuntu/squid:latest
+      target: ubuntu/squid:latest
+      profile: default
+      enabled: false
+    - source: semitechnologies/weaviate:1.19.0
+      target: semitechnologies/weaviate:1.19.0
+      profile: default
+      enabled: false
+    - source: postgres:15-alpine
+      target: postgres:15-alpine
+      profile: default
+      enabled: false
+    - source: warjiang/dify-api:0.15.2-self-hosted
+      target: warjiang/dify-api:0.15.2-self-hosted
+      profile: default
+      enabled: false
+    - source: warjiang/dify-web:0.15.2-self-hosted
+      target: warjiang/dify-web:0.15.2-self-hosted
+      profile: default
+      enabled: false
+    - source: ghcr.io/berriai/litellm:main-latest
+      target: berriai/litellm:main-latest[x]
+      profile: default
+      enabled: false
+    - source: ghcr.io/headlamp-k8s/headlamp:latest
+      target: headlamp-k8s/headlamp:latest
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.11.2
+      target: argoprojlabs/argocd-image-updater:v0.11.2
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.11.3
+      target: argoprojlabs/argocd-image-updater:v0.11.3
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.11.1
+      target: argoprojlabs/argocd-image-updater:v0.11.1
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.10.3
+      target: argoprojlabs/argocd-image-updater:v0.10.3
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.10.2
+      target: argoprojlabs/argocd-image-updater:v0.10.2
+      profile: default
+      enabled: false
+    - source: argoprojlabs/argocd-image-updater:v0.10.1
+      target: argoprojlabs/argocd-image-updater:v0.10.1
+      profile: default
+      enabled: false
+    - source: quay.io/argoprojlabs/argocd-image-updater:v0.16.0
+      target: argoprojlabs/argocd-image-updater:v0.16.0
+      profile: default
+      enabled: false
+    - source: jenkins/jenkins:2.504
+      target: jenkins/jenkins:2.504
+      profile: default
+      enabled: false
+    - source: lyzhang1999/result:env
+      target: lyzhang1999/result:env
+      profile: default
+      enabled: false
+    - source: lyzhang1999/vote:env
+      target: lyzhang1999/vote:env
+      profile: default
+      enabled: false
+    - source: lyzhang1999/worker:env
+      target: lyzhang1999/worker:env
+      profile: default
+      enabled: false
+    - source: lyzhang1999/result:remove-retry
+      target: lyzhang1999/result:remove-retry
+      profile: default
+      enabled: false
+    - source: lyzhang1999/week9-prometheus-app:custom-bucket
+      target: lyzhang1999/week9-prometheus-app:custom-bucket
+      profile: default
+      enabled: false
+    - source: lyzhang1999/opentelemetry-python
+      target: lyzhang1999/opentelemetry-python
+      profile: default
+      enabled: false
+    - source: lyzhang1999/opentelemetry-python-raw
+      target: lyzhang1999/opentelemetry-python-raw
+      profile: default
+      enabled: false
+    - source: lyzhang1999/webhook-admission-example
+      target: lyzhang1999/webhook-admission-example
+      profile: default
+      enabled: false
+    - source: lyzhang1999/blue-green:v1
+      target: lyzhang1999/blue-green:v1
+      profile: default
+      enabled: false
+    - source: lyzhang1999/blue-green:v2
+      target: lyzhang1999/blue-green:v2
+      profile: default
+      enabled: false
+    - source: argoproj/rollouts-demo:green
+      target: argoproj/rollouts-demo:green
+      profile: default
+      enabled: false
+    - source: argoproj/rollouts-demo:blue
+      target: argoproj/rollouts-demo:blue
+      profile: default
+      enabled: false
+    - source: busybox
+      target: busybox
+      profile: default
+      enabled: false
+    - source: redis:alpine
+      target: redis:alpine
+      profile: default
+      enabled: false
+    - source: postgres:9.4
+      target: postgres:9.4
+      profile: default
+      enabled: false
+    - source: postgres:14.2
+      target: postgres:14.2
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/ingress-nginx/controller:v1.8.2
+      target: ingress-nginx/controller:v1.8.2
+      profile: default
+      enabled: false
+    - source: nginx:latest
+      target: nginx:latest
+      profile: default
+      enabled: false
+    - source: nginx:1.14.2
+      target: nginx:1.14.2
+      profile: default
+      enabled: false
+    - source: nginx:1.17.6
+      target: nginx:1.17.6
+      profile: default
+      enabled: false
+    - source: nginx:1.25
+      target: nginx:1.25
+      profile: default
+      enabled: false
+    - source: feiyu563/prometheus-alert
+      target: feiyu563/prometheus-alert
+      profile: default
+      enabled: false
+    - source: jenkins/jenkins:lts
+      target: jenkins/jenkins:lts
+      profile: default
+      enabled: false
+    - source: lemonldapng/lemonldap-ng-controller:0.2.0
+      target: lemonldapng/lemonldap-ng-controller:0.2.0
+      profile: default
+      enabled: false
+    - source: curlimages/curl
+      target: curlimages/curl
+      profile: default
+      enabled: false
+    - source: yokogawa/siege:latest
+      target: yokogawa/siege:latest
+      profile: default
+      enabled: false
+    - source: jitesoft/kubectl:v1.28
+      target: jitesoft/kubectl:v1.28
+      profile: default
+      enabled: false
+    - source: alpine:latest
+      target: alpine:latest
+      profile: default
+      enabled: false
+    - source: alpine/git
+      target: alpine/git
+      profile: default
+      enabled: false
+    - source: docker:latest
+      target: docker:latest
+      profile: default
+      enabled: false
+    - source: mikefarah/yq
+      target: mikefarah/yq
+      profile: default
+      enabled: false
+    - source: return200/sonarqube-exporter:latest
+      target: return200/sonarqube-exporter:latest
+      profile: default
+      enabled: false
+    - source: bitnami/os-shell:11-debian-11-r43
+      target: bitnami/os-shell:11-debian-11-r43
+      profile: default
+      enabled: false
+    - source: bitnami/redis-exporter:1.52.0-debian-11-r23
+      target: bitnami/redis-exporter:1.52.0-debian-11-r23
+      profile: default
+      enabled: false
+    - source: bitnami/redis-sentinel:7.2.0-debian-11-r3
+      target: bitnami/redis-sentinel:7.2.0-debian-11-r3
+      profile: default
+      enabled: false
+    - source: bitnami/redis:7.2.0-debian-11-r3
+      target: bitnami/redis:7.2.0-debian-11-r3
+      profile: default
+      enabled: false
+    - source: bitnami/pgpool:4.4.4-debian-11-r2
+      target: bitnami/pgpool:4.4.4-debian-11-r2
+      profile: default
+      enabled: false
+    - source: bitnami/postgres-exporter:0.13.2-debian-11-r25
+      target: bitnami/postgres-exporter:0.13.2-debian-11-r25
+      profile: default
+      enabled: false
+    - source: bitnami/postgresql-repmgr:15.4.0-debian-11-r9
+      target: bitnami/postgresql-repmgr:15.4.0-debian-11-r9
+      profile: default
+      enabled: false
+    - source: bitnami/pgpool:4.2.3-debian-10-r38
+      target: bitnami/pgpool:4.2.3-debian-10-r38
+      profile: default
+      enabled: false
+    - source: bitnami/postgresql-repmgr:11.12.0-debian-10-r44
+      target: bitnami/postgresql-repmgr:11.12.0-debian-10-r44
+      profile: default
+      enabled: false
+    - source: quay.io/thanos/thanos:v0.31.0
+      target: thanos/thanos:v0.31.0
+      profile: default
+      enabled: false
+    - source: quay.io/thanos/thanos:v0.30.2
+      target: thanos/thanos:v0.30.2
+      profile: default
+      enabled: false
+    - source: quay.io/oauth2-proxy/oauth2-proxy:v7.3.0
+      target: oauth2-proxy/oauth2-proxy:v7.3.0
+      profile: default
+      enabled: false
+    - source: dockersamples/examplevotingapp_vote
+      target: dockersamples/examplevotingapp_vote
+      profile: default
+      enabled: false
+    - source: dockersamples/examplevotingapp_worker
+      target: dockersamples/examplevotingapp_worker
+      profile: default
+      enabled: false
+    - source: dockersamples/examplevotingapp_result
+      target: dockersamples/examplevotingapp_result
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/ingress-nginx/kube-webhook-certgen:v20230407
+      target: ingress-nginx/kube-webhook-certgen:v20230407
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/defaultbackend-amd64:1.5
+      target: defaultbackend-amd64:1.5
+      profile: default
+      enabled: false
+    - source: registry.access.redhat.com/ubi8/ubi-minimal:8.2
+      target: ubi8/ubi-minimal:8.2
+      profile: default
+      enabled: false
+    - source: sonarsource/sonar-scanner-cli@sha256:e028b6fd811f0184a3ff7f223a66908c3c359fa559c97fa2ee87042c2b540415
+      target: sonarsource/sonar-scanner-cli@sha256:e028b6fd811f0184a3ff7f223a66908c3c359fa559c97fa2ee87042c2b540415
+      profile: default
+      enabled: false
+    - source: library/bash:5.1.4
+      target: library/bash:5.1.4
+      profile: default
+      enabled: false
+    - source: ghcr.io/groundnuty/k8s-wait-for:v2.0
+      target: groundnuty/k8s-wait-for:v2.0
+      profile: default
+      enabled: false
+    - source: gcr.io/kaniko-project/executor:v1.11.0-debug
+      target: kaniko-project/executor:v1.11.0-debug
+      profile: default
+      enabled: false
+    - source: gcr.io/go-containerregistry/crane/debug:latest
+      target: go-containerregistry/crane/debug:latest
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/ingress-nginx/opentelemetry:v20230721-3e2062ee5
+      target: ingress-nginx/opentelemetry:v20230721-3e2062ee5
+      profile: default
+      enabled: false
+    - source: python:3
+      target: python:3
+      profile: default
+      enabled: false
+    - source: node:8.11.2
+      target: node:8.11.2
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/ingress-nginx/controller:v1.12.1
+      target: ingress-nginx/controller:v1.12.1
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/ingress-nginx/kube-webhook-certgen:v1.4.4
+      target: ingress-nginx/kube-webhook-certgen:v1.4.4
+      profile: default
+      enabled: false
+    - source: python:3.7.17
+      target: python:3.7.17
+      profile: default
+      enabled: false
+    - source: apache/eventmesh:v1.11.0
+      target: apache/eventmesh:v1.11.0
+      profile: default
+      enabled: false
+    - source: apache/rocketmq:4.9.4
+      target: apache/rocketmq:4.9.4
+      profile: default
+      enabled: false
+    - source: apacherocketmq/rocketmq-dashboard:1.0.0
+      target: apacherocketmq/rocketmq-dashboard:1.0.0
+      profile: default
+      enabled: false
+    - source: apache/rocketmq:5.3.2
+      target: apache/rocketmq:5.3.2
+      profile: default
+      enabled: false
+    - source: jenkins/jenkins:jdk21
+      target: jenkins/jenkins:jdk21
+      profile: default
+      enabled: false
+    - source: kiwigrid/k8s-sidecar:1.30.3
+      target: kiwigrid/k8s-sidecar:1.30.3
+      profile: default
+      enabled: false
+    - source: twalter/smee-client:1.0.2
+      target: twalter/smee-client:1.0.2
+      profile: default
+      enabled: false
+    - source: jenkins/inbound-agent:3301.v4363ddcca_4e7-3
+      target: jenkins/inbound-agent:3301.v4363ddcca_4e7-3
+      profile: default
+      enabled: false
+    - source: bats/bats:1.11.1
+      target: bats/bats:1.11.1
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/pipeline/controller-10a3e32792f33651396d02b6855a6e36:v0.70.0
+      target: tektoncd/pipeline/controller-10a3e32792f33651396d02b6855a6e36:v0.70.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/pipeline/events-a9042f7efb0cbade2a868a1ee5ddd52c:v0.70.0
+      target: tektoncd/pipeline/events-a9042f7efb0cbade2a868a1ee5ddd52c:v0.70.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/pipeline/resolvers-ff86b24f130c42b88983d3c13993056d:v0.70.0
+      target: tektoncd/pipeline/resolvers-ff86b24f130c42b88983d3c13993056d:v0.70.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/pipeline/webhook-d4749e605405422fd87700164e31b2d1:v0.70.0
+      target: tektoncd/pipeline/webhook-d4749e605405422fd87700164e31b2d1:v0.70.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/dashboard/dashboard-9623576a202fe86c8b7d1bc489905f86:v0.55.0
+      target: tektoncd/dashboard/dashboard-9623576a202fe86c8b7d1bc489905f86:v0.55.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/triggers/controller-f656ca31de179ab913fa76abc255c315:v0.31.0
+      target: tektoncd/triggers/controller-f656ca31de179ab913fa76abc255c315:v0.31.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/triggers/webhook-dd1edc925ee1772a9f76e2c1bc291ef6:v0.31.0
+      target: tektoncd/triggers/webhook-dd1edc925ee1772a9f76e2c1bc291ef6:v0.31.0
+      profile: default
+      enabled: false
+    - source: ghcr.io/tektoncd/triggers/interceptors-3176d6a3f314c3655b30bfd36e421dd5:v0.31.0
+      target: tektoncd/triggers/interceptors-3176d6a3f314c3655b30bfd36e421dd5:v0.31.0
+      profile: default
+      enabled: false
+    - source: mysql:8.4.2
+      target: mysql:8.4.2
+      profile: default
+      enabled: false
+    - source: redis:7.2.4-alpine3.19
+      target: redis:7.2.4-alpine3.19
+      profile: default
+      enabled: false
+    - source: clickhouse/clickhouse-server:24.3.6.48-alpine
+      target: clickhouse/clickhouse-server:24.3.6.48-alpine
+      profile: default
+      enabled: false
+    - source: bitnami/zookeeper:3.9.2-debian-12-r0
+      target: bitnami/zookeeper:3.9.2-debian-12-r0
+      profile: default
+      enabled: false
+    - source: minio/mc:RELEASE.2025-03-12T17-29-24Z
+      target: minio/mc:RELEASE.2025-03-12T17-29-24Z
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-backend:1.7.7
+      target: comet-ml/opik/opik-backend:1.7.7
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-frontend:1.7.7
+      target: comet-ml/opik/opik-frontend:1.7.7
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-python-backend:1.7.7
+      target: comet-ml/opik/opik-python-backend:1.7.7
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-sandbox-executor-python:1.7.7
+      target: comet-ml/opik/opik-sandbox-executor-python:1.7.7
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-frontend-comet:1.7.7
+      target: comet-ml/opik/opik-frontend-comet:1.7.7
+      profile: default
+      enabled: false
+    - source: ghcr.io/comet-ml/opik/opik-guardrails-backend:1.7.5-1521
+      target: comet-ml/opik/opik-guardrails-backend:1.7.5-1521[x]
+      profile: default
+      enabled: false
+    - source: cloudflare/cloudflared:latest
+      target: cloudflare/cloudflared:latest
+      profile: default
+      enabled: false
+    - source: hashicorp/vault:1.19.2
+      target: hashicorp/vault:1.19.2
+      profile: default
+      enabled: false
+    - source: ghcr.io/github/github-mcp-server
+      target: github/github-mcp-server
+      profile: default
+      enabled: false
+    - source: xpkg.upbound.io/crossplane/crossplane:v1.19.1
+      target: crossplane/crossplane:v1.19.1
+      profile: default
+      enabled: false
+    - source: alpine:3.20.3
+      target: alpine:3.20.3
+      profile: default
+      enabled: false
+    - source: sayem4604/ttyd
+      target: sayem4604/ttyd
+      profile: default
+      enabled: false
+    - source: '[x]bitnami/elasticsearch-curator:5.8.4-debian-10-r215'
+      target: bitnami/elasticsearch-curator:5.8.4-debian-10-r215
+      profile: default
+      enabled: false
+    - source: bitnami/elasticsearch-curator-archived:5.8.4-debian-10-r215
+      target: bitnami/elasticsearch-curator-archived:5.8.4-debian-10-r215
+      profile: default
+      enabled: false
+    - source: bitnami/elasticsearch:7.16.2-debian-10-r0
+      target: bitnami/elasticsearch:7.16.2-debian-10-r0
+      profile: default
+      enabled: false
+    - source: bitnami/elasticsearch-exporter:1.3.0-debian-10-r56
+      target: bitnami/elasticsearch-exporter:1.3.0-debian-10-r56
+      profile: default
+      enabled: false
+    - source: bitnami/bitnami-shell:10-debian-10-r284
+      target: bitnami/bitnami-shell:10-debian-10-r284
+      profile: default
+      enabled: false
+    - source: bitnami/bitnami-shell:10-debian-10-r431
+      target: bitnami/bitnami-shell:10-debian-10-r431
+      profile: default
+      enabled: false
+    - source: bitnami/bitnami-shell:11-debian-11-r38
+      target: bitnami/bitnami-shell:11-debian-11-r38
+      profile: default
+      enabled: false
+    - source: bitnami/bitnami-shell:11-debian-11-r11
+      target: bitnami/bitnami-shell:11-debian-11-r11
+      profile: default
+      enabled: false
+    - source: bitnami/aws-cli:2.4.7-debian-10-r4
+      target: bitnami/aws-cli:2.4.7-debian-10-r4
+      profile: default
+      enabled: false
+    - source: bitnami/azure-cli:2.36.0-debian-10-r23
+      target: bitnami/azure-cli:2.36.0-debian-10-r23
+      profile: default
+      enabled: false
+    - source: bitnami/google-cloud-sdk:0.386.0-debian-10-r2
+      target: bitnami/google-cloud-sdk:0.386.0-debian-10-r2
+      profile: default
+      enabled: false
+    - source: bitnami/influxdb:1.8.3-debian-10-r88
+      target: bitnami/influxdb:1.8.3-debian-10-r88
+      profile: default
+      enabled: false
+    - source: bitnami/mysql:8.0.37-debian-12-r2
+      target: bitnami/mysql:8.0.37-debian-12-r2
+      profile: default
+      enabled: false
+    - source: bitnami/mysqld-exporter:0.15.1-debian-12-r16
+      target: bitnami/mysqld-exporter:0.15.1-debian-12-r16
+      profile: default
+      enabled: false
+    - source: bitnami/os-shell:12-debian-12-r21
+      target: bitnami/os-shell:12-debian-12-r21
+      profile: default
+      enabled: false
+    - source: bitnami/rabbitmq:3.10.8-debian-11-r4
+      target: bitnami/rabbitmq:3.10.8-debian-11-r4
+      profile: default
+      enabled: false
+    - source: bitnami/redis:6.2.7-debian-11-r11
+      target: bitnami/redis:6.2.7-debian-11-r11
+      profile: default
+      enabled: false
+    - source: bitnami/redis-exporter:1.43.0-debian-11-r4
+      target: bitnami/redis-exporter:1.43.0-debian-11-r4
+      profile: default
+      enabled: false
+    - source: bitnami/redis-sentinel:6.2.7-debian-11-r12
+      target: bitnami/redis-sentinel:6.2.7-debian-11-r12
+      profile: default
+      enabled: false
+    - source: gcr.io/kaniko-project/executor:v1.9.0
+      target: kaniko-project/executor:v1.9.0
+      profile: default
+      enabled: false
+    - source: docker:24.0.1-dind
+      target: docker:24.0.1-dind
+      profile: default
+      enabled: false
+    - source: bkci/ci:latest
+      target: bkci/ci:latest
+      profile: default
+      enabled: false
+    - source: bkci/bkci-kubernetes-manager:0.0.32
+      target: bkci/bkci-kubernetes-manager:0.0.32
+      profile: default
+      enabled: false
+    - source: bkci/bkci-kubernetes-manager:0.0.33
+      target: bkci/bkci-kubernetes-manager:0.0.33
+      profile: default
+      enabled: false
+    - source: bkci/bkci-backend:v3.2.0
+      target: bkci/bkci-backend:v3.2.0
+      profile: default
+      enabled: false
+    - source: bkci/bkci-frontend:v3.2.0
+      target: bkci/bkci-frontend:v3.2.0
+      profile: default
+      enabled: false
+    - source: bkci/bkci-turbo:0.0.18
+      target: bkci/bkci-turbo:0.0.18
+      profile: default
+      enabled: false
+    - source: bkci/bkci-gateway:v3.2.0
+      target: bkci/bkci-gateway:v3.2.0
+      profile: default
+      enabled: false
+    - source: rancher/local-path-provisioner:v0.0.31
+      target: rancher/local-path-provisioner:v0.0.31
+      profile: default
+      enabled: false
+    - source: langwatch/langwatch:latest
+      target: langwatch/langwatch:latest
+      profile: default
+      enabled: false
+    - source: langwatch/langwatch_nlp:latest
+      target: langwatch/langwatch_nlp:latest
+      profile: default
+      enabled: false
+    - source: langwatch/langevals:latest
+      target: langwatch/langevals:latest
+      profile: default
+      enabled: false
+    - source: postgres:16
+      target: postgres:16
+      profile: default
+      enabled: false
+    - source: opensearchproject/opensearch:2.17.1
+      target: opensearchproject/opensearch:2.17.1
+      profile: default
+      enabled: false
+    - source: mysql:8.0
+      target: mysql:8.0
+      profile: default
+      enabled: false
+    - source: redis:6.2
+      target: redis:6.2
+      profile: default
+      enabled: false
+    - source: rabbitmq:3.11
+      target: rabbitmq:3.11
+      profile: default
+      enabled: false
+    - source: bitnami/etcd:3.5
+      target: bitnami/etcd:3.5
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-gateway:latest
+      target: ss1917/codo-gateway:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-frontend:latest
+      target: ss1917/codo-frontend:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-admin:latest
+      target: ss1917/codo-admin:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cmdb:latest
+      target: ss1917/codo-cmdb:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-api:latest
+      target: ss1917/codo-flow-api:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-loop:latest
+      target: ss1917/codo-flow-loop:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-queue:latest
+      target: ss1917/codo-flow-queue:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-exec-task:latest
+      target: ss1917/codo-exec-task:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-task-log:latest
+      target: ss1917/flow-task-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-agent-log:latest
+      target: ss1917/flow-agent-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-agent-server:latest
+      target: ss1917/codo-agent-server:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cnmp:latest
+      target: ss1917/codo-cnmp:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-notice:latest
+      target: ss1917/codo-notice:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-k2:latest
+      target: ss1917/codo-k2:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/etcd:3.5
+      target: ss1917/etcd:3.5
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/mysql:8.0
+      target: ss1917/mysql:8.0
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/redis:6.2
+      target: ss1917/redis:6.2
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-task-scheduler:latest
+      target: ss1917/codo-flow-task-scheduler:latest
+      profile: default
+      enabled: false
+    - source: envoyproxy/envoy:dev
+      target: envoyproxy/envoy:dev
+      profile: default
+      enabled: false
+    - source: envoyproxy/envoy:contrib-dev
+      target: envoyproxy/envoy:contrib-dev
+      profile: default
+      enabled: false
+    - source: envoyproxy/envoy-build-ubuntu:f94a38f62220a2b017878b790b6ea98a0f6c5f9c@sha256:2dd96b6f43c08ccabd5f4747fce5854f5f96af509b32e5cf6493f136e9833649
+      target: envoyproxy/envoy-build-ubuntu:f94a38f62220a2b017878b790b6ea98a0f6c5f9c@sha256:2dd96b6f43c08ccabd5f4747fce5854f5f96af509b32e5cf6493f136e9833649[x]
+      profile: default
+      enabled: false
+    - source: envoyproxy/envoy-build-ubuntu@sha256:2dd96b6f43c08ccabd5f4747fce5854f5f96af509b32e5cf6493f136e9833649
+      target: envoyproxy/envoy-build-ubuntu@sha256:2dd96b6f43c08ccabd5f4747fce5854f5f96af509b32e5cf6493f136e9833649
+      profile: default
+      enabled: false
+    - source: rust:1.85.1
+      target: rust:1.85.1
+      profile: default
+      enabled: false
+    - source: debian:bookworm-slim
+      target: debian:bookworm-slim
+      profile: default
+      enabled: false
+    - source: debian:bookworm-slim@sha256:d365f4920711a9074c4bcd178e8f457ee59250426441ab2a5f8106ed8fe948eb
+      target: debian:bookworm-slim@sha256:d365f4920711a9074c4bcd178e8f457ee59250426441ab2a5f8106ed8fe948eb
+      profile: default
+      enabled: false
+    - source: debian@sha256:d365f4920711a9074c4bcd178e8f457ee59250426441ab2a5f8106ed8fe948eb
+      target: debian@sha256:d365f4920711a9074c4bcd178e8f457ee59250426441ab2a5f8106ed8fe948eb
+      profile: default
+      enabled: false
+    - source: golang:1.24.1-bookworm@sha256:fa1a01d362a7b9df68b021d59a124d28cae6d99ebd1a876e3557c4dd092f1b1d
+      target: golang:1.24.1-bookworm@sha256:fa1a01d362a7b9df68b021d59a124d28cae6d99ebd1a876e3557c4dd092f1b1d
+      profile: default
+      enabled: false
+    - source: golang:1.24.1-bookworm
+      target: golang:1.24.1-bookworm
+      profile: default
+      enabled: false
+    - source: jaegertracing/all-in-one:1.67.0@sha256:34e3d18e0f2eeb9abd9bb53d0dc7abaf2a5b1c884fdca575093af3126811a9d3
+      target: jaegertracing/all-in-one:1.67.0@sha256:34e3d18e0f2eeb9abd9bb53d0dc7abaf2a5b1c884fdca575093af3126811a9d3
+      profile: default
+      enabled: false
+    - source: jaegertracing/all-in-one:1.67.0
+      target: jaegertracing/all-in-one:1.67.0
+      profile: default
+      enabled: false
+    - source: node:23.10-bookworm-slim@sha256:b89d748ea010f4d276c9d45c750fa5f371cef3fcc7486f739f07e5aad1b998a8
+      target: node:23.10-bookworm-slim@sha256:b89d748ea010f4d276c9d45c750fa5f371cef3fcc7486f739f07e5aad1b998a8
+      profile: default
+      enabled: false
+    - source: node:23.10-bookworm-slim
+      target: node:23.10-bookworm-slim
+      profile: default
+      enabled: false
+    - source: postgres:latest@sha256:fe4efc6901dda0d952306fd962643d8022d7bb773ffe13fe8a21551b9276e50c
+      target: postgres:latest@sha256:fe4efc6901dda0d952306fd962643d8022d7bb773ffe13fe8a21551b9276e50c
+      profile: default
+      enabled: false
+    - source: postgres@sha256:fe4efc6901dda0d952306fd962643d8022d7bb773ffe13fe8a21551b9276e50c
+      target: postgres@sha256:fe4efc6901dda0d952306fd962643d8022d7bb773ffe13fe8a21551b9276e50c
+      profile: default
+      enabled: false
+    - source: python:3.11.5-slim-bookworm@sha256:edaf703dce209d774af3ff768fc92b1e3b60261e7602126276f9ceb0e3a96874
+      target: python:3.11.5-slim-bookworm@sha256:edaf703dce209d774af3ff768fc92b1e3b60261e7602126276f9ceb0e3a96874
+      profile: default
+      enabled: false
+    - source: python:3.11.5-slim-bookworm
+      target: python:3.11.5-slim-bookworm
+      profile: default
+      enabled: false
+    - source: langgenius/dify-api:1.3.1
+      target: langgenius/dify-api:1.3.1
+      profile: default
+      enabled: false
+    - source: langgenius/dify-web:1.3.1
+      target: langgenius/dify-web:1.3.1
+      profile: default
+      enabled: false
+    - source: langgenius/dify-sandbox:0.2.11
+      target: langgenius/dify-sandbox:0.2.11
+      profile: default
+      enabled: false
+    - source: langgenius/dify-plugin-daemon:0.0.9-local
+      target: langgenius/dify-plugin-daemon:0.0.9-local
+      profile: default
+      enabled: false
+    - source: debian:stable-slim
+      target: debian:stable-slim
+      profile: default
+      enabled: false
+    - source: redis:6.2.11
+      target: redis:6.2.11
+      profile: default
+      enabled: false
+    - source: bitnami/rabbitmq:3.13.6-debian-12-r1
+      target: bitnami/rabbitmq:3.13.6-debian-12-r1
+      profile: default
+      enabled: false
+    - source: cloudflare/cloudflared:2025.5.0
+      target: cloudflare/cloudflared:2025.5.0
+      profile: default
+      enabled: false
+    - source: cloudflare/cloudflared:latest
+      target: cloudflare/cloudflared:latest
+      profile: default
+      enabled: false
+    - source: kennethreitz/httpbin:latest
+      target: kennethreitz/httpbin:latest
+      profile: default
+      enabled: false
+    - source: openresty/openresty:1.27.1.2-0-jammy
+      target: openresty/openresty:1.27.1.2-0-jammy
+      profile: default
+      enabled: false
+    - source: openresty/openresty:1.27.1.2-0-focal
+      target: openresty/openresty:1.27.1.2-0-focal
+      profile: default
+      enabled: false
+    - source: openresty/openresty:1.27.1.2-0-bookworm-fat
+      target: openresty/openresty:1.27.1.2-0-bookworm-fat
+      profile: default
+      enabled: false
+    - source: openresty/openresty:1.27.1.2-0-alpine
+      target: openresty/openresty:1.27.1.2-0-alpine
+      profile: default
+      enabled: false
+    - source: openresty/openresty:1.27.1.2-0-alpine-apk
+      target: openresty/openresty:1.27.1.2-0-alpine-apk
+      profile: default
+      enabled: false
+    - source: openresty/openresty:noble
+      target: openresty/openresty:noble
+      profile: default
+      enabled: false
+    - source: openresty/openresty:jammy
+      target: openresty/openresty:jammy
+      profile: default
+      enabled: false
+    - source: openresty/openresty:bullseye-debug
+      target: openresty/openresty:bullseye-debug
+      profile: default
+      enabled: false
+    - source: openresty/openresty:bullseye-valgrind
+      target: openresty/openresty:bullseye-valgrind
+      profile: default
+      enabled: false
+    - source: '[x]openresty/openresty:bullseye-fat-debug'
+      target: openresty/openresty:bullseye-fat-debug
+      profile: default
+      enabled: false
+    - source: '[x]openresty/openresty:bullseye-fat-valgrind'
+      target: openresty/openresty:bullseye-fat-valgrind
+      profile: default
+      enabled: false
+    - source: jumpserver/chen:v4.10.0-ce
+      target: jumpserver/chen:v4.10.0-ce
+      profile: default
+      enabled: false
+    - source: jumpserver/core:v4.10.0-ce
+      target: jumpserver/core:v4.10.0-ce
+      profile: default
+      enabled: false
+    - source: jumpserver/lion:v4.10.0-ce
+      target: jumpserver/lion:v4.10.0-ce
+      profile: default
+      enabled: false
+    - source: jumpserver/web:v4.10.0-ce
+      target: jumpserver/web:v4.10.0-ce
+      profile: default
+      enabled: false
+    - source: jumpserver/koko:v4.10.0-ce
+      target: jumpserver/koko:v4.10.0-ce
+      profile: default
+      enabled: false
+    - source: bitnami/os-shell:12-debian-12-r43
+      target: bitnami/os-shell:12-debian-12-r43
+      profile: default
+      enabled: false
+    - source: bitnami/postgres-exporter:0.17.1-debian-12-r6
+      target: bitnami/postgres-exporter:0.17.1-debian-12-r6
+      profile: default
+      enabled: false
+    - source: bitnami/postgresql:17.4.0-debian-12-r17
+      target: bitnami/postgresql:17.4.0-debian-12-r17
+      profile: default
+      enabled: false
+    - source: gcr.io/k8s-staging-sig-storage/nfs-subdir-external-provisioner:v4.0.0
+      target: k8s-staging-sig-storage/nfs-subdir-external-provisioner:v4.0.0
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-gateway:latest
+      target: ss1917/codo-gateway:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-frontend:latest
+      target: ss1917/codo-frontend:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-admin:latest
+      target: ss1917/codo-admin:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cmdb:latest
+      target: ss1917/codo-cmdb:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-api:latest
+      target: ss1917/codo-flow-api:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-loop:latest
+      target: ss1917/codo-flow-loop:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-queue:latest
+      target: ss1917/codo-flow-queue:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-flow-task-scheduler:latest
+      target: ss1917/codo-flow-task-scheduler:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-exec-task:latest
+      target: ss1917/codo-exec-task:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-task-log:latest
+      target: ss1917/flow-task-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/flow-agent-log:latest
+      target: ss1917/flow-agent-log:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-agent-server:latest
+      target: ss1917/codo-agent-server:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-cnmp:latest
+      target: ss1917/codo-cnmp:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-notice:latest
+      target: ss1917/codo-notice:latest
+      profile: default
+      enabled: false
+    - source: registry.cn-shanghai.aliyuncs.com/ss1917/codo-k2:latest
+      target: ss1917/codo-k2:latest
+      profile: default
+      enabled: false
+    - source: quay.io/helmpack/chart-testing:v3.12.0
+      target: helmpack/chart-testing:v3.12.0
+      profile: default
+      enabled: false
+    - source: quay.io/projectquay/golang:1.24
+      target: projectquay/golang:1.24
+      profile: default
+      enabled: false
+    - source: quay.io/sclorg/redis-7-c9s:c9s
+      target: sclorg/redis-7-c9s:c9s
+      profile: default
+      enabled: false
+    - source: '[x]quay.io/tms/pd-disagg-benchmark:0.0.6'
+      target: tms/pd-disagg-benchmark:0.0.6
+      profile: default
+      enabled: false
+    - source: quay.io/curl/curl:latest
+      target: curl/curl:latest
+      profile: default
+      enabled: false
+    - source: ghcr.io/llm-d/llm-d-model-service:0.0.10
+      target: llm-d/llm-d-model-service:0.0.10
+      profile: default
+      enabled: false
+    - source: ghcr.io/llm-d/llm-d-inference-scheduler:0.0.4
+      target: llm-d/llm-d-inference-scheduler:0.0.4
+      profile: default
+      enabled: false
+    - source: ghcr.io/llm-d/llm-d:0.0.8
+      target: llm-d/llm-d:0.0.8
+      profile: default
+      enabled: false
+    - source: ghcr.io/llm-d/llm-d-routing-sidecar:0.0.6
+      target: llm-d/llm-d-routing-sidecar:0.0.6
+      profile: default
+      enabled: false
+    - source: ghcr.io/llm-d/llm-d-inference-sim:0.0.4
+      target: llm-d/llm-d-inference-sim:0.0.4
+      profile: default
+      enabled: false
+    - source: python:3.10
+      target: python:3.10
+      profile: default
+      enabled: false
+    - source: kindest/node:v1.30.0
+      target: kindest/node:v1.30.0
+      profile: default
+      enabled: false
+    - source: registry.access.redhat.com/ubi8/ubi-minimal:latest
+      target: ubi8/ubi-minimal:latest
+      profile: default
+      enabled: false
+    - source: calciumion/new-api:latest
+      target: calciumion/new-api:latest
+      profile: default
+      enabled: false
+    - source: calciumion/new-api:v0.7.3.2
+      target: calciumion/new-api:v0.7.3.2
+      profile: default
+      enabled: false
+    - source: mysql:8.2
+      target: mysql:8.2
+      profile: default
+      enabled: false
+    - source: redis:latest
+      target: redis:latest
+      profile: default
+      enabled: false
+    - source: ghcr.io/huolalatech/page-spy-web:v2.3.1
+      target: huolalatech/page-spy-web:v2.3.1
+      profile: default
+      enabled: false
+    - source: ghcr.io/huolalatech/page-spy-web:v2.3.3
+      target: huolalatech/page-spy-web:v2.3.3
+      profile: default
+      enabled: false
+    - source: ghcr.io/huolalatech/page-spy-web:latest
+      target: huolalatech/page-spy-web:latest
+      profile: default
+      enabled: false
+    - source: ghcr.io/astral-sh/uv:python3.11-bookworm
+      target: astral-sh/uv:python3.11-bookworm
+      profile: default
+      enabled: false
+    - source: ghcr.io/astral-sh/uv:python3.12-bookworm
+      target: astral-sh/uv:python3.12-bookworm
+      profile: default
+      enabled: false
+    - source: ghcr.io/astral-sh/uv:python3.13-bookworm
+      target: astral-sh/uv:python3.13-bookworm
+      profile: default
+      enabled: false
+    - source: ghcr.io/astral-sh/uv:python3.14-rc-bookworm
+      target: astral-sh/uv:python3.14-rc-bookworm
+      profile: default
+      enabled: false
+    - source: ghcr.io/warjiang/page-spy-web:on-premises
+      target: warjiang/page-spy-web:on-premises
+      profile: default
+      enabled: false
+    - source: ghcr.io/m1k1o/neko/chromium:3.0.6
+      target: m1k1o/neko/chromium:3.0.6
+      profile: default
+      enabled: false
+    - source: ghcr.io/m1k1o/neko/google-chrome:3.0.6
+      target: m1k1o/neko/google-chrome:3.0.6
+      profile: default
+      enabled: false
+    - source: ghcr.io/m1k1o/neko/firefox:3.0.6
+      target: m1k1o/neko/firefox:3.0.6
+      profile: default
+      enabled: false
+    - source: ghcr.io/m1k1o/neko/xfce:3.0.6
+      target: m1k1o/neko/xfce:3.0.6
+      profile: default
+      enabled: false
+    - source: quay.io/coreos/etcd:v3.5.18
+      target: coreos/etcd:v3.5.18
+      profile: default
+      enabled: false
+    - source: minio/minio:RELEASE.2023-03-20T20-16-18Z
+      target: minio/minio:RELEASE.2023-03-20T20-16-18Z
+      profile: default
+      enabled: false
+    - source: milvusdb/milvus:v2.6.0-rc1
+      target: milvusdb/milvus:v2.6.0-rc1
+      profile: default
+      enabled: false
+    - source: ghcr.io/warjiang/inspector:sha256-d045bb13ca04c619a41c635a854c8cd7477d2bd1641b4c2059fb0e9efffb9c4d
+      target: warjiang/inspector:sha256-d045bb13ca04c619a41c635a854c8cd7477d2bd1641b4c2059fb0e9efffb9c4d
+      profile: default
+      enabled: false
+    - source: ghcr.io/warjiang/inspector:on-premises
+      target: warjiang/inspector:on-premises
+      profile: default
+      enabled: false
+    - source: warjiang/cloudflare-tunnel-operator:main
+      target: warjiang/cloudflare-tunnel-operator:main
+      profile: default
+      enabled: false
+    - source: ghcr.io/ai-hermes/screenshot-to-code-frontend:latest
+      target: ai-hermes/screenshot-to-code-frontend:latest
+      profile: default
+      enabled: false
+    - source: ghcr.io/ai-hermes/screenshot-to-code-backend:latest
+      target: ai-hermes/screenshot-to-code-backend:latest
+      profile: default
+      enabled: false
+    - source: quay.io/argoproj/argocd:v3.0.6
+      target: argoproj/argocd:v3.0.6
+      profile: default
+      enabled: false
+    - source: ghcr.io/dexidp/dex:v2.41.1
+      target: dexidp/dex:v2.41.1
+      profile: default
+      enabled: false
+    - source: redis:7.2.7-alpine
+      target: redis:7.2.7-alpine
+      profile: default
+      enabled: false
+    - source: karmada/karmada-dashboard-terminal:latest
+      target: karmada/karmada-dashboard-terminal:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-controller-manager:v1.14.1
+      target: karmada/karmada-controller-manager:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-scheduler:v1.14.1
+      target: karmada/karmada-scheduler:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-descheduler:v1.14.1
+      target: karmada/karmada-descheduler:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-webhook:v1.14.1
+      target: karmada/karmada-webhook:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-scheduler-estimator:v1.14.1
+      target: karmada/karmada-scheduler-estimator:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-aggregated-apiserver:v1.14.1
+      target: karmada/karmada-aggregated-apiserver:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-search:v1.14.1
+      target: karmada/karmada-search:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-metrics-adapter:v1.14.1
+      target: karmada/karmada-metrics-adapter:v1.14.1
+      profile: default
+      enabled: false
+    - source: karmada/karmada-agent:v1.14.1
+      target: karmada/karmada-agent:v1.14.1
+      profile: default
+      enabled: false
+    - source: warjiang/kubernetes-dashboard-api:latest
+      target: warjiang/kubernetes-dashboard-api:latest
+      profile: default
+      enabled: false
+    - source: kindest/node:v1.31.2
+      target: kindest/node:v1.31.2
+      profile: default
+      enabled: false
+    - source: karmada/karmada-controller-manager:latest
+      target: karmada/karmada-controller-manager:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-scheduler:latest
+      target: karmada/karmada-scheduler:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-descheduler:latest
+      target: karmada/karmada-descheduler:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-webhook:latest
+      target: karmada/karmada-webhook:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-scheduler-estimator:latest
+      target: karmada/karmada-scheduler-estimator:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-aggregated-apiserver:latest
+      target: karmada/karmada-aggregated-apiserver:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-search:latest
+      target: karmada/karmada-search:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-metrics-adapter:latest
+      target: karmada/karmada-metrics-adapter:latest
+      profile: default
+      enabled: false
+    - source: karmada/karmada-agent:latest
+      target: karmada/karmada-agent:latest
+      profile: default
+      enabled: false
+    - source: registry.k8s.io/metrics-server/metrics-server:v0.6.3
+      target: metrics-server/metrics-server:v0.6.3
+      profile: default
+      enabled: false
+    - source: ghcr.spotty.com.cn/open-webui/open-webui:main
+      target: open-webui/open-webui:main
+      profile: default
+      enabled: false
+    - source: gitlab/gitlab-ce:19.0.0-ce.0
+      target: gitlab-gitlab-ce:19.0.0-ce.0
+      profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-05-21T16:03:38Z"
+      synced_at: "2026-05-21T16:03:38Z"
+synced_images:
+    - profile: default
+      source: bitnami/kubectl:latest
+      target: bitnami-kubectl:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: cfssl/cfssl:latest
+      target: cfssl-cfssl:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: ghcr.io/justlovemaki/openclaw-docker-cn-im:2026.4.8-f2
+      target: justlovemaki-openclaw-docker-cn-im:2026.4.8-f2
+      created_at: "2026-05-23T06:30:12Z"
+      synced_at: "2026-05-23T06:30:12Z"
+    - profile: default
+      source: ghcr.io/multica-ai/multica-backend:v0.3.6
+      target: multica-ai-multica-backend:v0.3.6
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
+    - profile: default
+      source: ghcr.io/multica-ai/multica-web:v0.3.6
+      target: multica-ai-multica-web:v0.3.6
+      created_at: "2026-05-25T05:33:49Z"
+      synced_at: "2026-05-25T05:33:49Z"
+    - profile: default
+      source: ghcr.io/warjiang/huobao-canvas:v0.1.2
+      target: warjiang-huobao-canvas:v0.1.2
+      created_at: "2026-05-28T17:30:34Z"
+      synced_at: "2026-05-28T17:30:34Z"
+    - profile: default
+      source: gitlab/gitlab-ce:19.0.0-ce.0
+      target: gitlab-gitlab-ce:19.0.0-ce.0
+      created_at: "2026-05-21T16:03:38Z"
+      synced_at: "2026-05-21T16:03:38Z"
+    - profile: default
+      source: golang:1.20.0
+      target: golang:1.20.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-aggregated-apiserver:v1.8.0
+      target: karmada-karmada-aggregated-apiserver:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-controller-manager:v1.8.0
+      target: karmada-karmada-controller-manager:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-dashboard-api:v0.1.0
+      target: karmada-karmada-dashboard-api:v0.1.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-dashboard-web:v0.1.0
+      target: karmada-karmada-dashboard-web:v0.1.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-metrics-adapter:v1.8.0
+      target: karmada-karmada-metrics-adapter:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-scheduler:v1.8.0
+      target: karmada-karmada-scheduler:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: karmada/karmada-webhook:v1.8.0
+      target: karmada-karmada-webhook:v1.8.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: lmsysorg/sglang:latest
+      target: lmsysorg-sglang:latest
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: lmsysorg/sglang:v0.4.3.post4-cu125
+      target: lmsysorg-sglang:v0.4.3.post4-cu125
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0
+      target: nginx-nginx-ingress:4.0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0-alpine
+      target: nginx-nginx-ingress:4.0-alpine
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0.1-20250309-ubi
+      target: nginx-nginx-ingress:4.0.1-20250309-ubi
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx/nginx-ingress:4.0.1-ubi
+      target: nginx-nginx-ingress:4.0.1-ubi
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: nginx:alpine
+      target: nginx:alpine
+      created_at: "2026-05-25T03:58:14Z"
+      synced_at: "2026-05-25T03:58:14Z"
+    - profile: default
+      source: node:18.19.0-buster
+      target: node:18.19.0-buster
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: node:20-alpine
+      target: node:20-alpine
+      created_at: "2026-05-25T03:19:43Z"
+      synced_at: "2026-05-25T03:19:43Z"
+    - profile: default
+      source: nvidia/cuda:11.0.3-base
+      target: nvidia-cuda:11.0.3-base
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/etcd:3.5.9-0
+      target: etcd:3.5.9-0
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/kube-apiserver:v1.25.4
+      target: kube-apiserver:v1.25.4
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: registry.k8s.io/kube-controller-manager:v1.25.4
+      target: kube-controller-manager:v1.25.4
+      synced_at: "2026-05-18T09:44:19Z"
+    - profile: default
+      source: warjiang/lastbeat:0.1.4
+      target: warjiang-lastbeat:0.1.4
+      created_at: "2026-05-29T05:37:17Z"
+      synced_at: "2026-05-29T05:37:17Z"
+    - profile: default
+      source: warjiang/lastbeat:0.1.5
+      target: warjiang-lastbeat:0.1.5
+      created_at: "2026-05-29T10:34:38Z"
+      synced_at: "2026-05-29T10:34:38Z"
+    - profile: default
+      source: warjiang/lastbeat:0.1.6
+      target: warjiang-lastbeat:0.1.6
+      created_at: "2026-05-29T10:55:16Z"
+      synced_at: "2026-05-29T10:55:16Z"
