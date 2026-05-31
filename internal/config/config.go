@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -88,9 +89,34 @@ func DefaultConfig() Config {
 	}
 }
 
+func DefaultUserConfigPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve user home directory: %w", err)
+	}
+	home = strings.TrimSpace(home)
+	if home == "" {
+		return "", errors.New("resolve user home directory: empty home path")
+	}
+	return filepath.Join(home, ".mirrorpilot", DefaultConfigPath), nil
+}
+
+func DefaultUserConfigPathOrFallback() string {
+	path, err := DefaultUserConfigPath()
+	if err != nil {
+		return DefaultConfigPath
+	}
+	return path
+}
+
 func Load(configPath string) (LoadedConfig, error) {
+	configPath = strings.TrimSpace(configPath)
 	if configPath == "" {
-		configPath = DefaultConfigPath
+		var err error
+		configPath, err = DefaultUserConfigPath()
+		if err != nil {
+			return LoadedConfig{}, err
+		}
 	}
 
 	if _, err := os.Stat(configPath); err == nil {
@@ -99,25 +125,6 @@ func Load(configPath string) (LoadedConfig, error) {
 			return LoadedConfig{}, err
 		}
 		return LoadedConfig{Path: configPath, Config: cfg}, nil
-	}
-
-	if configPath == DefaultConfigPath {
-		if _, err := os.Stat(LegacyConfigPath); err == nil {
-			cfg, err := loadYAML(LegacyConfigPath)
-			if err != nil {
-				return LoadedConfig{}, err
-			}
-			return LoadedConfig{Path: LegacyConfigPath, Config: cfg}, nil
-		}
-	}
-
-	legacyPath := LegacyListPath
-	if _, err := os.Stat(legacyPath); err == nil {
-		cfg, err := loadLegacy(legacyPath)
-		if err != nil {
-			return LoadedConfig{}, err
-		}
-		return LoadedConfig{Path: configPath, FromLegacy: true, Config: cfg}, nil
 	}
 
 	return LoadedConfig{Path: configPath, Config: DefaultConfig()}, nil
@@ -138,6 +145,9 @@ func (lc LoadedConfig) Save() error {
 	data, err := yaml.Marshal(&cfg)
 	if err != nil {
 		return fmt.Errorf("marshal config: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(lc.Path), 0755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
 	}
 	return os.WriteFile(lc.Path, data, 0644)
 }

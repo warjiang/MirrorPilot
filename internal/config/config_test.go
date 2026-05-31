@@ -91,3 +91,89 @@ func TestNormalizeBuildsSyncedImages(t *testing.T) {
 		t.Fatalf("unexpected synced_at: %s", norm.SyncedImages[0].SyncedAt)
 	}
 }
+
+func TestLoad_UsesDefaultHomeConfigPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDir := filepath.Join(home, ".mirrorpilot")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "mirrorpilot.yaml")
+	content := `
+version: v1
+profiles:
+  default:
+    registry: registry.example.com/ns
+    username_env: DEST_REGISTRY_USER
+    password_env: DEST_REGISTRY_PASSWORD
+images:
+  - source: nginx:1.27
+    target: mirror/nginx:1.27
+    profile: default
+    enabled: true
+`
+	if err := os.WriteFile(configPath, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	lc, err := Load("")
+	if err != nil {
+		t.Fatalf("load default home config: %v", err)
+	}
+	if lc.Path != configPath {
+		t.Fatalf("expected path %s, got %s", configPath, lc.Path)
+	}
+	if len(lc.Config.Images) != 1 {
+		t.Fatalf("expected 1 image, got %d", len(lc.Config.Images))
+	}
+}
+
+func TestLoad_DoesNotFallbackToLegacyWhenDefaultMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	workDir := t.TempDir()
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(oldWd) }()
+	if err := os.Chdir(workDir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.WriteFile(filepath.Join(workDir, LegacyConfigPath), []byte("version: v1\nimages: []\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, LegacyListPath), []byte("nginx:1.27=>mirror/nginx:1.27\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	lc, err := Load("")
+	if err != nil {
+		t.Fatalf("load default config: %v", err)
+	}
+	expectedPath := filepath.Join(home, ".mirrorpilot", DefaultConfigPath)
+	if lc.Path != expectedPath {
+		t.Fatalf("expected path %s, got %s", expectedPath, lc.Path)
+	}
+	if len(lc.Config.Images) != 0 {
+		t.Fatalf("expected default config with 0 images, got %d", len(lc.Config.Images))
+	}
+}
+
+func TestLoadedConfigSave_CreatesParentDir(t *testing.T) {
+	base := t.TempDir()
+	path := filepath.Join(base, ".mirrorpilot", "mirrorpilot.yaml")
+	lc := LoadedConfig{
+		Path:   path,
+		Config: DefaultConfig(),
+	}
+	if err := lc.Save(); err != nil {
+		t.Fatalf("save config: %v", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected saved file at %s: %v", path, err)
+	}
+}

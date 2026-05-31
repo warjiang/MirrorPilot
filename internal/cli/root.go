@@ -20,6 +20,19 @@ type options struct {
 	ConfigPath string
 }
 
+type listedImage struct {
+	Source     string `json:"source" yaml:"source"`
+	Target     string `json:"target" yaml:"target"`
+	Profile    string `json:"profile" yaml:"profile"`
+	Enabled    bool   `json:"enabled" yaml:"enabled"`
+	Synced     bool   `json:"synced" yaml:"synced"`
+	CreatedAt  string `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	SyncedAt   string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
+	Notes      string `json:"notes,omitempty" yaml:"notes,omitempty"`
+	FullSource string `json:"full_source" yaml:"full_source"`
+	FullTarget string `json:"full_target" yaml:"full_target"`
+}
+
 func NewRootCmd() *cobra.Command {
 	opts := &options{}
 	cmd := &cobra.Command{
@@ -29,7 +42,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", config.DefaultConfigPath, "Path to YAML config file")
+	cmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", config.DefaultUserConfigPathOrFallback(), "Path to YAML config file (default: ~/.mirrorpilot/mirrorpilot.yaml)")
 
 	cmd.AddCommand(
 		newAddCmd(opts),
@@ -38,6 +51,7 @@ func NewRootCmd() *cobra.Command {
 		newListCmd(opts),
 		newSyncedCmd(opts),
 		newRemoteCmd(opts),
+		newSearchCmd(opts),
 		newMigrateCmd(opts),
 		newValidateCmd(opts),
 		newSyncCmd(opts),
@@ -72,6 +86,9 @@ func newAddCmd(opts *options) *cobra.Command {
 			}
 			cfg := config.Normalize(lc.Config)
 			config.EnsureDefaultProfile(&cfg)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			if _, ok := cfg.Profiles[profile]; !ok {
 				return fmt.Errorf("profile %q does not exist", profile)
@@ -129,6 +146,9 @@ func newRemoveCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			kept := make([]config.Image, 0, len(cfg.Images))
 			removed := 0
@@ -188,6 +208,9 @@ func newMarkCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			var ts string
 			if synced {
@@ -263,6 +286,9 @@ func newListCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			selectedFilterCount := 0
 			if showAll {
@@ -281,7 +307,7 @@ func newListCmd(opts *options) *cobra.Command {
 				showPending = true
 			}
 
-			items := make([]config.Image, 0, len(cfg.Images))
+			items := make([]listedImage, 0, len(cfg.Images))
 			for _, img := range cfg.Images {
 				imgProfile := img.Profile
 				if imgProfile == "" {
@@ -299,8 +325,18 @@ func newListCmd(opts *options) *cobra.Command {
 				if showPending && img.Synced {
 					continue
 				}
-				img.Profile = imgProfile
-				items = append(items, img)
+				items = append(items, listedImage{
+					Source:     img.Source,
+					Target:     img.Target,
+					Profile:    imgProfile,
+					Enabled:    img.EnabledValue(),
+					Synced:     img.Synced,
+					CreatedAt:  img.CreatedAt,
+					SyncedAt:   img.SyncedAt,
+					Notes:      img.Notes,
+					FullSource: buildFullSource(img.Source),
+					FullTarget: buildFullTarget(cfg, imgProfile, img.Target),
+				})
 			}
 
 			sort.Slice(items, func(i, j int) bool {
@@ -315,9 +351,9 @@ func newListCmd(opts *options) *cobra.Command {
 
 			switch output {
 			case "table":
-				fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tCREATED_AT\tSYNCED_AT")
+				fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tFULL_SOURCE\tFULL_TARGET\tCREATED_AT\tSYNCED_AT")
 				for _, img := range items {
-					fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\n", img.Profile, img.EnabledValue(), img.Synced, img.Source, img.Target, img.CreatedAt, img.SyncedAt)
+					fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\t%s\t%s\n", img.Profile, img.Enabled, img.Synced, img.Source, img.Target, img.FullSource, img.FullTarget, img.CreatedAt, img.SyncedAt)
 				}
 			case "json":
 				enc := json.NewEncoder(os.Stdout)
