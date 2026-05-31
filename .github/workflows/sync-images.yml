@@ -63,7 +63,7 @@ jobs:
           chmod +x bin/mirrorpilot
 
       - name: Validate config
-        run: ./bin/mirrorpilot validate
+        run: ./bin/mirrorpilot --config ./mirrorpilot.yaml validate
 
       - name: Sync images
         env:
@@ -75,7 +75,7 @@ jobs:
           if [ "$RESYNC_ALL" = "true" ]; then
             args="--all"
           fi
-          ./bin/mirrorpilot sync $args
+          ./bin/mirrorpilot --config ./mirrorpilot.yaml sync $args
 
       - name: Commit sync status
         run: |

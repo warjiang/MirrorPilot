@@ -20,11 +20,13 @@ const (
 )
 
 type Config struct {
-	Version      string                     `yaml:"version"`
-	Remote       RemoteConfig               `yaml:"remote,omitempty"`
-	Profiles     map[string]RegistryProfile `yaml:"profiles"`
-	Images       []Image                    `yaml:"images"`
-	SyncedImages []SyncedImage              `yaml:"synced_images,omitempty"`
+	Version        string                     `yaml:"version"`
+	Remote         RemoteConfig               `yaml:"remote,omitempty"`
+	Profiles       map[string]RegistryProfile `yaml:"profiles"`
+	Images         []Image                    `yaml:"images"`
+	PendingImages  []Image                    `yaml:"pending_images,omitempty"`
+	PendingDeletes []PendingDelete            `yaml:"pending_deletes,omitempty"`
+	SyncedImages   []SyncedImage              `yaml:"synced_images,omitempty"`
 }
 
 type RegistryProfile struct {
@@ -43,6 +45,12 @@ type Image struct {
 	SyncedAt     string `yaml:"synced_at,omitempty"`
 	LastSyncedAt string `yaml:"last_synced_at,omitempty"`
 	Notes        string `yaml:"notes,omitempty"`
+}
+
+type PendingDelete struct {
+	Source  string `yaml:"source"`
+	Target  string `yaml:"target"`
+	Profile string `yaml:"profile,omitempty"`
 }
 
 type RemoteConfig struct {
@@ -182,6 +190,33 @@ func Normalize(cfg Config) Config {
 			}
 		}
 	}
+	for i := range cfg.PendingImages {
+		if cfg.PendingImages[i].Profile == "" {
+			cfg.PendingImages[i].Profile = DefaultProfile
+		}
+		if cfg.PendingImages[i].Enabled == nil {
+			cfg.PendingImages[i].Enabled = BoolPtr(true)
+		}
+		if cfg.PendingImages[i].SyncedAt == "" && cfg.PendingImages[i].LastSyncedAt != "" {
+			cfg.PendingImages[i].SyncedAt = cfg.PendingImages[i].LastSyncedAt
+		}
+		cfg.PendingImages[i].LastSyncedAt = ""
+		if cfg.PendingImages[i].CreatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, cfg.PendingImages[i].CreatedAt); err == nil {
+				cfg.PendingImages[i].CreatedAt = t.UTC().Format(time.RFC3339)
+			}
+		}
+		if cfg.PendingImages[i].SyncedAt != "" {
+			if t, err := time.Parse(time.RFC3339, cfg.PendingImages[i].SyncedAt); err == nil {
+				cfg.PendingImages[i].SyncedAt = t.UTC().Format(time.RFC3339)
+			}
+		}
+	}
+	for i := range cfg.PendingDeletes {
+		if cfg.PendingDeletes[i].Profile == "" {
+			cfg.PendingDeletes[i].Profile = DefaultProfile
+		}
+	}
 	for i := range cfg.SyncedImages {
 		if cfg.SyncedImages[i].SyncedAt == "" && cfg.SyncedImages[i].LastSyncedAt != "" {
 			cfg.SyncedImages[i].SyncedAt = cfg.SyncedImages[i].LastSyncedAt
@@ -293,6 +328,54 @@ func Validate(cfg Config) []error {
 			if _, err := time.Parse(time.RFC3339, img.SyncedAt); err != nil {
 				errs = append(errs, fmt.Errorf("images[%d] has invalid synced_at %q", idx, img.SyncedAt))
 			}
+		}
+	}
+
+	for idx, img := range cfg.PendingImages {
+		if strings.TrimSpace(img.Source) == "" {
+			errs = append(errs, fmt.Errorf("pending_images[%d] has empty source", idx))
+		}
+		if strings.TrimSpace(img.Target) == "" {
+			errs = append(errs, fmt.Errorf("pending_images[%d] has empty target", idx))
+		}
+		if img.Profile == "" {
+			img.Profile = DefaultProfile
+		}
+		if _, ok := cfg.Profiles[img.Profile]; !ok {
+			errs = append(errs, fmt.Errorf("pending_images[%d] references missing profile %q", idx, img.Profile))
+		}
+		key := img.Profile + "|" + img.Source + "|" + img.Target
+		if img.EnabledValue() {
+			if _, ok := seenEnabled[key]; ok {
+				errs = append(errs, fmt.Errorf("duplicate enabled image entry %q", key))
+			}
+			seenEnabled[key] = struct{}{}
+		}
+
+		if img.CreatedAt != "" {
+			if _, err := time.Parse(time.RFC3339, img.CreatedAt); err != nil {
+				errs = append(errs, fmt.Errorf("pending_images[%d] has invalid created_at %q", idx, img.CreatedAt))
+			}
+		}
+		if img.SyncedAt != "" {
+			if _, err := time.Parse(time.RFC3339, img.SyncedAt); err != nil {
+				errs = append(errs, fmt.Errorf("pending_images[%d] has invalid synced_at %q", idx, img.SyncedAt))
+			}
+		}
+	}
+
+	for idx, del := range cfg.PendingDeletes {
+		if strings.TrimSpace(del.Source) == "" {
+			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty source", idx))
+		}
+		if strings.TrimSpace(del.Target) == "" {
+			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty target", idx))
+		}
+		if strings.TrimSpace(del.Profile) == "" {
+			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty profile", idx))
+		}
+		if _, ok := cfg.Profiles[del.Profile]; !ok {
+			errs = append(errs, fmt.Errorf("pending_deletes[%d] references missing profile %q", idx, del.Profile))
 		}
 	}
 
