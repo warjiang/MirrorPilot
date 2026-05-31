@@ -1,18 +1,19 @@
 BINARY=mirrorpilot
+GO ?= GOTOOLCHAIN=go1.24.0+auto go
 
 .PHONY: tidy build test run lint
 
 tidy:
-	go mod tidy
+	$(GO) mod tidy
 
 build:
-	go build -o bin/$(BINARY) ./cmd/mirrorpilot
+	$(GO) build -o bin/$(BINARY) ./cmd/mirrorpilot
 
 test:
-	go test ./...
+	$(GO) test ./...
 
 run:
-	go run ./cmd/mirrorpilot
+	$(GO) run ./cmd/mirrorpilot
 
 lint:
-	go vet ./...
+	$(GO) vet ./...

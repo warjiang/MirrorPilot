@@ -7,6 +7,8 @@ A fork-friendly image mirror repo with:
 
 ## Quick start
 
+Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues from older Go toolchains.
+
 1. Configure repository secrets:
    - `DEST_REGISTRY` (for example `registry.cn-shanghai.aliyuncs.com/<namespace>`)
    - `DEST_REGISTRY_USER`
@@ -29,7 +31,11 @@ go run ./cmd/mirrorpilot list --all
 
 ## Config
 
-Primary config file: `mirrorpilot.yaml`
+Configuration resolution has only two modes:
+1. explicitly set `--config /path/to/mirrorpilot.yaml`
+2. otherwise default to `~/.mirrorpilot/mirrorpilot.yaml`
+
+Default config file path: `~/.mirrorpilot/mirrorpilot.yaml`
 
 ```yaml
 version: v1
@@ -53,10 +59,9 @@ images:
 synced_images: []
 ```
 
-### Legacy compatibility
+### Legacy migration
 
-If `mirrorpilot.yaml` does not exist, CLI falls back to legacy `sync-images.yaml`, then `images.list`.
-You can migrate with:
+Legacy files are no longer auto-loaded. If you still have `images.list`, migrate explicitly:
 
 ```bash
 go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
@@ -77,6 +82,10 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 - `remote fetch`: fetch remote image list and merge into local config
 - `remote check`: verify remote repo read/write readiness
 - `remote push-config`: commit and push local config to remote repo
+
+`add` / `list` / `mark` / `remove` / `search` / `synced` require a configured remote repository. Configure it first with `remote set`.
+
+`remote.ref` defaults to `main` and `remote.config_path` defaults to `mirrorpilot.yaml` when omitted.
 
 Examples:
 

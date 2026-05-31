@@ -42,7 +42,7 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", config.DefaultConfigPath, "Path to YAML config file")
+	cmd.PersistentFlags().StringVar(&opts.ConfigPath, "config", config.DefaultUserConfigPathOrFallback(), "Path to YAML config file (default: ~/.mirrorpilot/mirrorpilot.yaml)")
 
 	cmd.AddCommand(
 		newAddCmd(opts),
@@ -86,6 +86,9 @@ func newAddCmd(opts *options) *cobra.Command {
 			}
 			cfg := config.Normalize(lc.Config)
 			config.EnsureDefaultProfile(&cfg)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			if _, ok := cfg.Profiles[profile]; !ok {
 				return fmt.Errorf("profile %q does not exist", profile)
@@ -143,6 +146,9 @@ func newRemoveCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			kept := make([]config.Image, 0, len(cfg.Images))
 			removed := 0
@@ -202,6 +208,9 @@ func newMarkCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			var ts string
 			if synced {
@@ -277,6 +286,9 @@ func newListCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			selectedFilterCount := 0
 			if showAll {

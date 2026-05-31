@@ -48,6 +48,9 @@ func newSearchCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 
 			items := make([]searchItem, 0, len(cfg.Images))
 			for _, img := range cfg.Images {

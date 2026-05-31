@@ -23,6 +23,23 @@ func TestResolveRemoteArgs(t *testing.T) {
 	}
 }
 
+func TestResolveRemoteArgs_DefaultsRefAndConfigPath(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Remote = config.RemoteConfig{
+		RepoURL: "https://example.com/repo.git",
+	}
+	repoURL, ref, configPath := resolveRemoteArgs("", "", "", cfg)
+	if repoURL != cfg.Remote.RepoURL {
+		t.Fatalf("unexpected repo url: %s", repoURL)
+	}
+	if ref != "main" {
+		t.Fatalf("expected default ref main, got %s", ref)
+	}
+	if configPath != config.DefaultConfigPath {
+		t.Fatalf("expected default config path %s, got %s", config.DefaultConfigPath, configPath)
+	}
+}
+
 func TestCheckRemoteReadAndWrite(t *testing.T) {
 	repoURL := setupGitRepo(t)
 	if err := checkRemoteRead(repoURL, "main"); err != nil {

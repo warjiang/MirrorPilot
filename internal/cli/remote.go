@@ -18,6 +18,8 @@ import (
 	"github.com/warjiang/MirrorPilot/internal/config"
 )
 
+const defaultRemoteRef = "main"
+
 func newRemoteCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remote",
@@ -55,6 +57,8 @@ func newRemoteSetCmd(opts *options) *cobra.Command {
 			if strings.TrimSpace(cfg.Remote.RepoURL) == "" {
 				return errors.New("remote repo url is required; set via --repo-url")
 			}
+			cfg.Remote.Ref = normalizeRemoteRef(cfg.Remote.Ref)
+			cfg.Remote.ConfigPath = normalizeRemoteConfigPath(cfg.Remote.ConfigPath)
 
 			lc.Config = cfg
 			if err := lc.Save(); err != nil {
@@ -86,16 +90,7 @@ func newRemoteFetchCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
-
-			if strings.TrimSpace(repoURL) == "" {
-				repoURL = cfg.Remote.RepoURL
-			}
-			if strings.TrimSpace(ref) == "" {
-				ref = cfg.Remote.Ref
-			}
-			if strings.TrimSpace(configPath) == "" {
-				configPath = cfg.Remote.ConfigPath
-			}
+			repoURL, ref, configPath = resolveRemoteArgs(repoURL, ref, configPath, cfg)
 			if strings.TrimSpace(repoURL) == "" {
 				return errors.New("remote repo url is required; set via `mirrorpilot remote set --repo-url ...` or pass --repo-url")
 			}
@@ -195,6 +190,9 @@ func newSyncedCmd(opts *options) *cobra.Command {
 				return err
 			}
 			cfg := config.Normalize(lc.Config)
+			if err := ensureRemoteConfigured(cfg); err != nil {
+				return err
+			}
 			items := cfg.SyncedImages
 			sort.Slice(items, func(i, j int) bool {
 				if items[i].Profile != items[j].Profile {
@@ -378,7 +376,23 @@ func resolveRemoteArgs(repoURL, ref, configPath string, cfg config.Config) (stri
 	if strings.TrimSpace(configPath) == "" {
 		configPath = cfg.Remote.ConfigPath
 	}
-	return strings.TrimSpace(repoURL), strings.TrimSpace(ref), strings.TrimSpace(configPath)
+	return strings.TrimSpace(repoURL), normalizeRemoteRef(ref), normalizeRemoteConfigPath(configPath)
+}
+
+func normalizeRemoteRef(ref string) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return defaultRemoteRef
+	}
+	return ref
+}
+
+func normalizeRemoteConfigPath(configPath string) string {
+	configPath = strings.TrimSpace(configPath)
+	if configPath == "" {
+		return config.DefaultConfigPath
+	}
+	return configPath
 }
 
 func checkRemoteRead(repoURL, ref string) error {
