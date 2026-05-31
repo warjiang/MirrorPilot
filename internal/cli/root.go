@@ -33,6 +33,17 @@ type listedImage struct {
 	FullTarget string `json:"full_target" yaml:"full_target"`
 }
 
+type listedImageBasic struct {
+	Source    string `json:"source" yaml:"source"`
+	Target    string `json:"target" yaml:"target"`
+	Profile   string `json:"profile" yaml:"profile"`
+	Enabled   bool   `json:"enabled" yaml:"enabled"`
+	Synced    bool   `json:"synced" yaml:"synced"`
+	CreatedAt string `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	SyncedAt  string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
+	Notes     string `json:"notes,omitempty" yaml:"notes,omitempty"`
+}
+
 func NewRootCmd() *cobra.Command {
 	opts := &options{}
 	cmd := &cobra.Command{
@@ -276,6 +287,7 @@ func newListCmd(opts *options) *cobra.Command {
 	var showPending bool
 	var profile string
 	var output string
+	var showFullPaths bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -351,16 +363,60 @@ func newListCmd(opts *options) *cobra.Command {
 
 			switch output {
 			case "table":
-				fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tFULL_SOURCE\tFULL_TARGET\tCREATED_AT\tSYNCED_AT")
-				for _, img := range items {
-					fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\t%s\t%s\n", img.Profile, img.Enabled, img.Synced, img.Source, img.Target, img.FullSource, img.FullTarget, img.CreatedAt, img.SyncedAt)
+				if showFullPaths {
+					fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tFULL_SOURCE\tFULL_TARGET\tCREATED_AT\tSYNCED_AT")
+					for _, img := range items {
+						fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\t%s\t%s\n", img.Profile, img.Enabled, img.Synced, img.Source, img.Target, img.FullSource, img.FullTarget, img.CreatedAt, img.SyncedAt)
+					}
+				} else {
+					fmt.Println("PROFILE\tENABLED\tSYNCED\tSOURCE\tTARGET\tCREATED_AT\tSYNCED_AT")
+					for _, img := range items {
+						fmt.Printf("%s\t%t\t%t\t%s\t%s\t%s\t%s\n", img.Profile, img.Enabled, img.Synced, img.Source, img.Target, img.CreatedAt, img.SyncedAt)
+					}
 				}
 			case "json":
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
-				return enc.Encode(items)
+				if showFullPaths {
+					return enc.Encode(items)
+				}
+				basicItems := make([]listedImageBasic, 0, len(items))
+				for _, img := range items {
+					basicItems = append(basicItems, listedImageBasic{
+						Source:    img.Source,
+						Target:    img.Target,
+						Profile:   img.Profile,
+						Enabled:   img.Enabled,
+						Synced:    img.Synced,
+						CreatedAt: img.CreatedAt,
+						SyncedAt:  img.SyncedAt,
+						Notes:     img.Notes,
+					})
+				}
+				return enc.Encode(basicItems)
 			case "yaml":
-				b, err := yaml.Marshal(items)
+				if showFullPaths {
+					b, err := yaml.Marshal(items)
+					if err != nil {
+						return err
+					}
+					fmt.Print(string(b))
+					break
+				}
+				basicItems := make([]listedImageBasic, 0, len(items))
+				for _, img := range items {
+					basicItems = append(basicItems, listedImageBasic{
+						Source:    img.Source,
+						Target:    img.Target,
+						Profile:   img.Profile,
+						Enabled:   img.Enabled,
+						Synced:    img.Synced,
+						CreatedAt: img.CreatedAt,
+						SyncedAt:  img.SyncedAt,
+						Notes:     img.Notes,
+					})
+				}
+				b, err := yaml.Marshal(basicItems)
 				if err != nil {
 					return err
 				}
@@ -376,6 +432,7 @@ func newListCmd(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&showPending, "pending", false, "Show only pending images (default)")
 	cmd.Flags().StringVar(&profile, "profile", "", "Filter by profile")
 	cmd.Flags().StringVar(&output, "output", "table", "Output format: table|json|yaml")
+	cmd.Flags().BoolVar(&showFullPaths, "full-paths", false, "Include full_source/full_target columns/fields")
 	return cmd
 }
 

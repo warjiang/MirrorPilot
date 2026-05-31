@@ -4,9 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
 	"github.com/warjiang/MirrorPilot/internal/config"
@@ -26,12 +24,15 @@ type searchItem struct {
 }
 
 type searchModel struct {
-	input         textinput.Model
 	items         []searchItem
 	filtered      []int
 	cursor        int
+	offset        int
 	width         int
 	height        int
+	query         string
+	searchMode    bool
+	searchDraft   string
 	confirmedItem *searchItem
 }
 
@@ -98,17 +99,10 @@ func newSearchCmd(opts *options) *cobra.Command {
 }
 
 func initialSearchModel(items []searchItem) searchModel {
-	input := textinput.New()
-	input.Placeholder = "Type to filter source/target/profile/notes..."
-	input.Focus()
-	input.CharLimit = 256
-	input.Width = 60
 	m := searchModel{
-		input:    input,
 		items:    items,
 		filtered: make([]int, len(items)),
-		cursor:   0,
-		width:    100,
+		width:    120,
 		height:   30,
 	}
 	for i := range items {
@@ -117,9 +111,7 @@ func initialSearchModel(items []searchItem) searchModel {
 	return m
 }
 
-func (m searchModel) Init() tea.Cmd {
-	return textinput.Blink
-}
+func (m searchModel) Init() tea.Cmd { return nil }
 
 func (m searchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -128,18 +120,24 @@ func (m searchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		return m, nil
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "ctrl+c", "q", "esc":
+		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
+		}
+		if m.searchMode {
+			return m.updateSearchMode(msg)
+		}
+		switch msg.String() {
+		case "q", "esc":
+			return m, tea.Quit
+		case "/":
+			m.searchMode = true
+			m.searchDraft = m.query
+			return m, nil
 		case "up", "k":
-			if len(m.filtered) > 0 && m.cursor > 0 {
-				m.cursor--
-			}
+			m.moveCursor(-1)
 			return m, nil
 		case "down", "j":
-			if len(m.filtered) > 0 && m.cursor < len(m.filtered)-1 {
-				m.cursor++
-			}
+			m.moveCursor(1)
 			return m, nil
 		case "enter":
 			if len(m.filtered) > 0 {
@@ -149,15 +147,34 @@ func (m searchModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
+	return m, nil
+}
 
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-	m.applyFilter()
-	return m, cmd
+func (m searchModel) updateSearchMode(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEsc:
+		m.searchMode = false
+		return m, nil
+	case tea.KeyEnter:
+		m.query = strings.TrimSpace(m.searchDraft)
+		m.applyFilter()
+		m.searchMode = false
+		return m, nil
+	case tea.KeyBackspace, tea.KeyCtrlH:
+		r := []rune(m.searchDraft)
+		if len(r) > 0 {
+			m.searchDraft = string(r[:len(r)-1])
+		}
+		return m, nil
+	case tea.KeyRunes:
+		m.searchDraft += msg.String()
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m *searchModel) applyFilter() {
-	query := strings.ToLower(strings.TrimSpace(m.input.Value()))
+	query := strings.ToLower(strings.TrimSpace(m.query))
 	next := make([]int, 0, len(m.items))
 	for i, item := range m.items {
 		haystack := strings.ToLower(strings.Join([]string{
@@ -175,78 +192,105 @@ func (m *searchModel) applyFilter() {
 	m.filtered = next
 	if len(m.filtered) == 0 {
 		m.cursor = 0
+		m.offset = 0
 		return
 	}
 	if m.cursor >= len(m.filtered) {
 		m.cursor = len(m.filtered) - 1
 	}
+	m.ensureCursorVisible()
+}
+
+func (m *searchModel) moveCursor(step int) {
+	if len(m.filtered) == 0 {
+		return
+	}
+	next := m.cursor + step
+	if next < 0 {
+		next = 0
+	}
+	if next >= len(m.filtered) {
+		next = len(m.filtered) - 1
+	}
+	m.cursor = next
+	m.ensureCursorVisible()
+}
+
+func (m *searchModel) ensureCursorVisible() {
+	tableHeight := m.visibleRows()
+	if tableHeight < 1 {
+		tableHeight = 1
+	}
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	}
+	if m.cursor >= m.offset+tableHeight {
+		m.offset = m.cursor - tableHeight + 1
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
+}
+
+func (m searchModel) visibleRows() int {
+	h := m.height - 8
+	if h < 3 {
+		h = 3
+	}
+	return h
 }
 
 func (m searchModel) View() string {
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205")).Render("MirrorPilot Search")
-	help := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("Type to filter • ↑/↓ move • Enter select • q quit")
-	query := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1).Render("Query: " + m.input.View())
-
-	leftWidth := m.width / 2
-	if leftWidth < 40 {
-		leftWidth = 40
-	}
-	rightWidth := m.width - leftWidth - 1
-	if rightWidth < 30 {
-		rightWidth = 30
+	modeLine := "Mode: normal  (j/k or ↑/↓ move, / search, Enter select, q quit)"
+	if m.searchMode {
+		modeLine = "Mode: search  /" + m.searchDraft + "  (Enter apply, Esc cancel)"
 	}
 
-	lines := make([]string, 0, len(m.filtered))
-	for i, idx := range m.filtered {
-		item := m.items[idx]
-		row := fmt.Sprintf("%s  %s => %s", item.Profile, item.Source, item.Target)
-		if i == m.cursor {
-			row = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("62")).Render("▶ " + row)
-		} else {
-			row = "  " + row
+	headers := []string{"SEL", "PROFILE", "EN", "SYNCED", "SOURCE", "TARGET", "FULL_TARGET"}
+	tableRows := make([][]string, 0, m.visibleRows())
+	end := m.offset + m.visibleRows()
+	if end > len(m.filtered) {
+		end = len(m.filtered)
+	}
+	for idx := m.offset; idx < end; idx++ {
+		item := m.items[m.filtered[idx]]
+		sel := " "
+		if idx == m.cursor {
+			sel = ">"
 		}
-		lines = append(lines, row)
+		tableRows = append(tableRows, []string{
+			sel,
+			item.Profile,
+			boolYN(item.Enabled),
+			boolYN(item.Synced),
+			item.Source,
+			item.Target,
+			item.FullTarget,
+		})
 	}
-	if len(lines) == 0 {
-		lines = append(lines, "  No matched images")
+	if len(tableRows) == 0 {
+		tableRows = append(tableRows, []string{" ", "-", "-", "-", "No matched images", "-", "-"})
 	}
-	listPane := lipgloss.NewStyle().
-		Width(leftWidth).
-		Height(maxInt(m.height-7, 8)).
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1).
-		Render(strings.Join(lines, "\n"))
 
-	detail := "No selection"
+	status := fmt.Sprintf("Rows: %d  Query: /%s", len(m.filtered), m.query)
+	detail := "Selection: none"
 	if len(m.filtered) > 0 {
 		item := m.items[m.filtered[m.cursor]]
-		detail = strings.Join([]string{
-			fmt.Sprintf("Profile: %s", item.Profile),
-			fmt.Sprintf("Enabled: %t", item.Enabled),
-			fmt.Sprintf("Synced: %t", item.Synced),
-			fmt.Sprintf("Source: %s", item.Source),
-			fmt.Sprintf("Target: %s", item.Target),
-			fmt.Sprintf("Full Source: %s", item.FullSource),
-			fmt.Sprintf("Full Target: %s", item.FullTarget),
-			fmt.Sprintf("Created At: %s", item.CreatedAt),
-			fmt.Sprintf("Synced At: %s", item.SyncedAt),
-			fmt.Sprintf("Notes: %s", item.Notes),
-		}, "\n")
+		detail = fmt.Sprintf("Selection: profile=%s source=%s target=%s full_target=%s", item.Profile, item.Source, item.Target, item.FullTarget)
 	}
-	detailPane := lipgloss.NewStyle().
-		Width(rightWidth).
-		Height(maxInt(m.height-7, 8)).
-		Border(lipgloss.RoundedBorder()).
-		Padding(0, 1).
-		Render(detail)
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top, listPane, detailPane)
-	return strings.Join([]string{title, help, query, body}, "\n")
+	return strings.Join([]string{
+		"MirrorPilot Search",
+		modeLine,
+		status,
+		renderGridTable(headers, tableRows, 36),
+		detail,
+	}, "\n")
 }
 
-func maxInt(a, b int) int {
-	if a > b {
-		return a
+func boolYN(v bool) string {
+	if v {
+		return "Y"
 	}
-	return b
+	return "N"
 }

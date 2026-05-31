@@ -181,6 +181,7 @@ func mergeRemoteIntoLocal(local *config.Config, remote config.Config) (added int
 
 func newSyncedCmd(opts *options) *cobra.Command {
 	var output string
+	var showFullPaths bool
 	cmd := &cobra.Command{
 		Use:   "synced",
 		Short: "Show synced image state from config",
@@ -219,15 +220,69 @@ func newSyncedCmd(opts *options) *cobra.Command {
 
 			switch output {
 			case "table":
-				fmt.Println("PROFILE\tSOURCE\tTARGET\tFULL_SOURCE\tFULL_TARGET\tCREATED_AT\tSYNCED_AT")
-				for _, item := range viewItems {
-					fmt.Printf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n", item.Profile, item.Source, item.Target, item.FullSource, item.FullTarget, item.CreatedAt, item.SyncedAt)
+				headers := []string{"PROFILE", "SOURCE", "TARGET", "CREATED_AT", "SYNCED_AT"}
+				if showFullPaths {
+					headers = []string{"PROFILE", "SOURCE", "TARGET", "FULL_SOURCE", "FULL_TARGET", "CREATED_AT", "SYNCED_AT"}
 				}
+				rows := make([][]string, 0, len(viewItems))
+				for _, item := range viewItems {
+					if showFullPaths {
+						rows = append(rows, []string{
+							item.Profile,
+							item.Source,
+							item.Target,
+							item.FullSource,
+							item.FullTarget,
+							item.CreatedAt,
+							item.SyncedAt,
+						})
+					} else {
+						rows = append(rows, []string{
+							item.Profile,
+							item.Source,
+							item.Target,
+							item.CreatedAt,
+							item.SyncedAt,
+						})
+					}
+				}
+				fmt.Print(renderGridTable(headers, rows, 44))
 			case "json":
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
+				if !showFullPaths {
+					basic := make([]syncedImageBasicView, 0, len(viewItems))
+					for _, item := range viewItems {
+						basic = append(basic, syncedImageBasicView{
+							Profile:   item.Profile,
+							Source:    item.Source,
+							Target:    item.Target,
+							CreatedAt: item.CreatedAt,
+							SyncedAt:  item.SyncedAt,
+						})
+					}
+					return enc.Encode(basic)
+				}
 				return enc.Encode(viewItems)
 			case "yaml":
+				if !showFullPaths {
+					basic := make([]syncedImageBasicView, 0, len(viewItems))
+					for _, item := range viewItems {
+						basic = append(basic, syncedImageBasicView{
+							Profile:   item.Profile,
+							Source:    item.Source,
+							Target:    item.Target,
+							CreatedAt: item.CreatedAt,
+							SyncedAt:  item.SyncedAt,
+						})
+					}
+					b, err := yaml.Marshal(basic)
+					if err != nil {
+						return err
+					}
+					fmt.Print(string(b))
+					break
+				}
 				b, err := yaml.Marshal(viewItems)
 				if err != nil {
 					return err
@@ -240,6 +295,7 @@ func newSyncedCmd(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&output, "output", "table", "Output format: table|json|yaml")
+	cmd.Flags().BoolVar(&showFullPaths, "full-paths", false, "Include full_source/full_target columns/fields")
 	return cmd
 }
 
@@ -251,6 +307,14 @@ type syncedImageView struct {
 	SyncedAt   string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
 	FullSource string `json:"full_source" yaml:"full_source"`
 	FullTarget string `json:"full_target" yaml:"full_target"`
+}
+
+type syncedImageBasicView struct {
+	Profile   string `json:"profile" yaml:"profile"`
+	Source    string `json:"source" yaml:"source"`
+	Target    string `json:"target" yaml:"target"`
+	CreatedAt string `json:"created_at,omitempty" yaml:"created_at,omitempty"`
+	SyncedAt  string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
 }
 
 func newRemoteCheckCmd(opts *options) *cobra.Command {

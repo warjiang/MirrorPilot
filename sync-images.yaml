@@ -1,7 +1,7 @@
 version: v1
 profiles:
     default:
-        registry: registry.example.com/namespace
+        registry: crpi-a01fov5fxhl285uu.cn-shanghai.personal.cr.aliyuncs.com/warjiang
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:

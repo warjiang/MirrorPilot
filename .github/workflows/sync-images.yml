@@ -67,7 +67,6 @@ jobs:
 
       - name: Sync images
         env:
-          DEST_REGISTRY: ${{ secrets.DEST_REGISTRY != '' && secrets.DEST_REGISTRY || secrets.ALIYUN_REGISTRY }}
           DEST_REGISTRY_USER: ${{ secrets.DEST_REGISTRY_USER != '' && secrets.DEST_REGISTRY_USER || secrets.ALIYUN_REGISTRY_USER }}
           DEST_REGISTRY_PASSWORD: ${{ secrets.DEST_REGISTRY_PASSWORD != '' && secrets.DEST_REGISTRY_PASSWORD || secrets.ALIYUN_REGISTRY_PASSWORD }}
           RESYNC_ALL: ${{ github.event_name == 'workflow_dispatch' && inputs.resync_all || false }}

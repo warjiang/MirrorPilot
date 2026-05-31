@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"os"
 	"strings"
 
 	"github.com/warjiang/MirrorPilot/internal/config"
@@ -16,13 +15,7 @@ func resolveRegistryForProfile(cfg config.Config, profile string) string {
 	if !ok {
 		return ""
 	}
-	registry := strings.TrimRight(strings.TrimSpace(profileCfg.Registry), "/")
-	if p == config.DefaultProfile {
-		if envRegistry := strings.TrimSpace(os.Getenv("DEST_REGISTRY")); envRegistry != "" {
-			registry = strings.TrimRight(envRegistry, "/")
-		}
-	}
-	return registry
+	return strings.TrimRight(strings.TrimSpace(profileCfg.Registry), "/")
 }
 
 func buildFullTarget(cfg config.Config, profile, target string) string {
