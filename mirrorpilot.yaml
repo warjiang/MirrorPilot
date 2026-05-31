@@ -1,4 +1,8 @@
 version: v1
+remote:
+    repo_url: git@github.com:warjiang/MirrorPilot.git
+    ref: main
+    config_path: mirrorpilot.yaml
 profiles:
     default:
         registry: crpi-a01fov5fxhl285uu.cn-shanghai.personal.cr.aliyuncs.com/warjiang

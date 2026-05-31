@@ -57,7 +57,7 @@ func NewRootCmd() *cobra.Command {
 
 	cmd.AddCommand(
 		newAddCmd(opts),
-		newRemoveCmd(opts),
+		newDeleteCmd(opts),
 		newMarkCmd(opts),
 		newListCmd(opts),
 		newSyncedCmd(opts),
@@ -113,21 +113,40 @@ func newAddCmd(opts *options) *cobra.Command {
 					return fmt.Errorf("image mapping already exists for profile=%s source=%s target=%s", profile, source, target)
 				}
 			}
+			for _, img := range cfg.PendingImages {
+				p := img.Profile
+				if p == "" {
+					p = config.DefaultProfile
+				}
+				if p == profile && img.Source == source && img.Target == target {
+					return fmt.Errorf("image mapping already exists for profile=%s source=%s target=%s", profile, source, target)
+				}
+			}
+			if len(cfg.PendingDeletes) > 0 {
+				keptDeletes := make([]config.PendingDelete, 0, len(cfg.PendingDeletes))
+				key := imageKey(profile, source, target)
+				for _, del := range cfg.PendingDeletes {
+					if pendingDeleteKey(del) == key {
+						continue
+					}
+					keptDeletes = append(keptDeletes, del)
+				}
+				cfg.PendingDeletes = keptDeletes
+			}
 
-			cfg.Images = append(cfg.Images, config.Image{
-				Source:    source,
-				Target:    target,
-				Profile:   profile,
-				Enabled:   config.BoolPtr(enabled),
-				Synced:    false,
-				CreatedAt: time.Now().UTC().Format(time.RFC3339),
-				Notes:     note,
+			cfg.PendingImages = append(cfg.PendingImages, config.Image{
+				Source:  source,
+				Target:  target,
+				Profile: profile,
+				Enabled: config.BoolPtr(enabled),
+				Synced:  false,
+				Notes:   note,
 			})
 			lc.Config = cfg
 			if err := lc.Save(); err != nil {
 				return err
 			}
-			fmt.Printf("added image: %s => %s (profile=%s)\n", source, target, profile)
+			fmt.Printf("staged image: %s => %s (profile=%s)\n", source, target, profile)
 			return nil
 		},
 	}
@@ -140,14 +159,15 @@ func newAddCmd(opts *options) *cobra.Command {
 	return cmd
 }
 
-func newRemoveCmd(opts *options) *cobra.Command {
+func newDeleteCmd(opts *options) *cobra.Command {
 	var source string
 	var target string
 	var profile string
 
 	cmd := &cobra.Command{
-		Use:   "remove",
-		Short: "Remove image mapping(s)",
+		Use:     "delete",
+		Aliases: []string{"remove"},
+		Short:   "Stage image deletion(s)",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(source) == "" {
 				return errors.New("--source is required")
@@ -160,42 +180,57 @@ func newRemoveCmd(opts *options) *cobra.Command {
 			if err := ensureRemoteConfigured(cfg); err != nil {
 				return err
 			}
+			profile = strings.TrimSpace(profile)
 
-			kept := make([]config.Image, 0, len(cfg.Images))
-			removed := 0
-			for _, img := range cfg.Images {
-				imgProfile := img.Profile
-				if imgProfile == "" {
-					imgProfile = config.DefaultProfile
-				}
-				match := img.Source == source
-				if target != "" {
-					match = match && img.Target == target
-				}
-				if profile != "" {
-					match = match && imgProfile == profile
-				}
-				if match {
-					removed++
+			// Cancel matching staged additions first.
+			keptPending := make([]config.Image, 0, len(cfg.PendingImages))
+			canceledAdds := 0
+			for _, img := range cfg.PendingImages {
+				if imageMatchesFilter(img, source, target, profile) {
+					canceledAdds++
 					continue
 				}
-				kept = append(kept, img)
+				keptPending = append(keptPending, img)
 			}
-			if removed == 0 {
+			cfg.PendingImages = keptPending
+
+			// Stage concrete deletions for existing committed mappings.
+			stagedDeleteSet := make(map[string]struct{}, len(cfg.PendingDeletes))
+			for _, del := range cfg.PendingDeletes {
+				stagedDeleteSet[pendingDeleteKey(del)] = struct{}{}
+			}
+			stagedDeletes := 0
+			for _, img := range cfg.Images {
+				if !imageMatchesFilter(img, source, target, profile) {
+					continue
+				}
+				del := config.PendingDelete{
+					Source:  img.Source,
+					Target:  img.Target,
+					Profile: normalizedProfile(img.Profile),
+				}
+				key := pendingDeleteKey(del)
+				if _, exists := stagedDeleteSet[key]; exists {
+					continue
+				}
+				stagedDeleteSet[key] = struct{}{}
+				cfg.PendingDeletes = append(cfg.PendingDeletes, del)
+				stagedDeletes++
+			}
+			if stagedDeletes == 0 && canceledAdds == 0 {
 				return errors.New("no matching image entries found")
 			}
-			cfg.Images = kept
 			lc.Config = cfg
 			if err := lc.Save(); err != nil {
 				return err
 			}
-			fmt.Printf("removed %d image entries\n", removed)
+			fmt.Printf("staged delete entries=%d canceled_staged_additions=%d\n", stagedDeletes, canceledAdds)
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&source, "source", "", "Source image to remove (required)")
-	cmd.Flags().StringVar(&target, "target", "", "Optional target image to narrow the removal")
-	cmd.Flags().StringVar(&profile, "profile", "", "Optional profile to narrow the removal")
+	cmd.Flags().StringVar(&source, "source", "", "Source image to delete (required)")
+	cmd.Flags().StringVar(&target, "target", "", "Optional target image to narrow the deletion")
+	cmd.Flags().StringVar(&profile, "profile", "", "Optional profile to narrow the deletion")
 	return cmd
 }
 

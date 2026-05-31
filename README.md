@@ -57,6 +57,8 @@ images:
     created_at: 2026-05-18T00:00:00Z
     synced: false
     synced_at: ""
+pending_images: []
+pending_deletes: []
 synced_images: []
 ```
 
@@ -102,8 +104,8 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 
 ## CLI commands
 
-- `add`: add image mapping
-- `remove`: remove mapping(s)
+- `add`: stage image mapping into `pending_images` (does not directly modify `images`)
+- `delete` (`remove` alias): stage mapping deletion into `pending_deletes`
 - `mark`: set `synced` state manually
 - `list`: list entries (`--all`, `--pending`, `--synced`)
 - `synced`: list synced image records from `synced_images`
@@ -112,11 +114,11 @@ go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
 - `migrate`: convert `images.list` to YAML
 - `sync`: execute actual mirror sync (CI only)
 - `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
-- `remote fetch`: fetch remote image list and merge into local config
+- `remote fetch`: fetch remote image list and merge into local config (`--forced` can force local to match remote)
 - `remote check`: verify remote repo read/write readiness
-- `remote push-config`: commit and push local config to remote repo
+- `remote push-config`: `--dry-run` shows staged `pending_images` + `pending_deletes`; real push applies staged deletes and adds to latest remote config, then pushes
 
-`add` / `list` / `mark` / `remove` / `search` / `synced` require a configured remote repository. Configure it first with `remote set`.
+`add` / `delete` (`remove`) / `list` / `mark` / `search` / `synced` require a configured remote repository. Configure it first with `remote set`.
 
 `remote.ref` defaults to `main` and `remote.config_path` defaults to `mirrorpilot.yaml` when omitted.
 
@@ -125,6 +127,7 @@ Examples:
 ```bash
 go run ./cmd/mirrorpilot remote set --repo-url https://github.com/warjiang/MirrorPilot.git --ref main --config-path mirrorpilot.yaml
 go run ./cmd/mirrorpilot remote fetch --merge
+go run ./cmd/mirrorpilot remote fetch --merge --forced
 go run ./cmd/mirrorpilot remote check
 go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
 go run ./cmd/mirrorpilot search

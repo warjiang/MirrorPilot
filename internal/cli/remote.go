@@ -79,6 +79,7 @@ func newRemoteFetchCmd(opts *options) *cobra.Command {
 	var ref string
 	var configPath string
 	var merge bool
+	var forced bool
 	var dryRun bool
 
 	cmd := &cobra.Command{
@@ -102,14 +103,27 @@ func newRemoteFetchCmd(opts *options) *cobra.Command {
 
 			fmt.Printf("fetched remote config: repo=%s ref=%s path=%s images=%d synced=%d\n", repoURL, ref, remoteUsedPath, len(remoteCfg.Images), len(remoteCfg.SyncedImages))
 			if !merge {
+				if forced {
+					return errors.New("--forced requires --merge")
+				}
 				return nil
 			}
 
-			added, syncedUpdated, profileAdded := mergeRemoteIntoLocal(&cfg, remoteCfg)
+			if forced {
+				forceRemoteIntoLocal(&cfg, remoteCfg)
+			}
+			added, syncedUpdated, profileAdded, profileUpdated := 0, 0, 0, 0
+			if !forced {
+				added, syncedUpdated, profileAdded, profileUpdated = mergeRemoteIntoLocal(&cfg, remoteCfg)
+			}
 			cfg.Remote = config.RemoteConfig{RepoURL: repoURL, Ref: ref, ConfigPath: configPath}
 			config.RefreshSyncedImages(&cfg)
 
-			fmt.Printf("merge result: profiles_added=%d images_added=%d synced_updated=%d\n", profileAdded, added, syncedUpdated)
+			if forced {
+				fmt.Printf("merge result: forced=true profiles=%d images=%d synced=%d\n", len(cfg.Profiles), len(cfg.Images), len(cfg.SyncedImages))
+			} else {
+				fmt.Printf("merge result: profiles_added=%d profiles_updated=%d images_added=%d synced_updated=%d\n", profileAdded, profileUpdated, added, syncedUpdated)
+			}
 			if dryRun {
 				fmt.Println("dry-run enabled; local config not modified")
 				return nil
@@ -127,14 +141,23 @@ func newRemoteFetchCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&ref, "ref", "", "Remote branch/tag/ref (defaults to configured remote.ref)")
 	cmd.Flags().StringVar(&configPath, "config-path", "", "Config path in remote repo (defaults to configured remote.config_path)")
 	cmd.Flags().BoolVar(&merge, "merge", true, "Merge fetched data into local config")
+	cmd.Flags().BoolVar(&forced, "forced", false, "Force local config to match fetched remote config (requires --merge)")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview merge result without writing local file")
 	return cmd
 }
 
-func mergeRemoteIntoLocal(local *config.Config, remote config.Config) (added int, syncedUpdated int, profileAdded int) {
+func forceRemoteIntoLocal(local *config.Config, remote config.Config) {
+	*local = config.Normalize(remote)
+}
+
+func mergeRemoteIntoLocal(local *config.Config, remote config.Config) (added int, syncedUpdated int, profileAdded int, profileUpdated int) {
 	config.EnsureDefaultProfile(local)
 	for name, p := range remote.Profiles {
-		if _, ok := local.Profiles[name]; ok {
+		if cur, ok := local.Profiles[name]; ok {
+			if cur.Registry != p.Registry || cur.UsernameEnv != p.UsernameEnv || cur.PasswordEnv != p.PasswordEnv {
+				local.Profiles[name] = p
+				profileUpdated++
+			}
 			continue
 		}
 		local.Profiles[name] = p
@@ -176,7 +199,7 @@ func mergeRemoteIntoLocal(local *config.Config, remote config.Config) (added int
 		added++
 	}
 
-	return added, syncedUpdated, profileAdded
+	return added, syncedUpdated, profileAdded, profileUpdated
 }
 
 func newSyncedCmd(opts *options) *cobra.Command {
@@ -392,14 +415,22 @@ func newRemotePushConfigCmd(opts *options) *cobra.Command {
 			if strings.TrimSpace(configPath) == "" {
 				configPath = config.DefaultConfigPath
 			}
+			if len(cfg.PendingImages) == 0 && len(cfg.PendingDeletes) == 0 {
+				fmt.Println("no staged changes in pending_images/pending_deletes; nothing to push")
+				return nil
+			}
+			if dryRun {
+				printPendingChangesPreview(cfg)
+				fmt.Println("dry-run enabled; remote repository not modified")
+				return nil
+			}
 
 			targetBranch := strings.TrimSpace(branch)
 			if targetBranch == "" {
 				targetBranch = strings.TrimSpace(ref)
 			}
 
-			pushed, err := pushConfigToRemote(repoURL, ref, targetBranch, configPath, cfg, pushConfigOptions{
-				DryRun:      dryRun,
+			pushed, deletedCount, mergedAdded, mergedUpdated, err := pushPendingConfigToRemote(repoURL, ref, targetBranch, configPath, cfg, pushConfigOptions{
 				Message:     message,
 				AuthorName:  authorName,
 				AuthorEmail: authorEmail,
@@ -407,15 +438,21 @@ func newRemotePushConfigCmd(opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			appliedDeleted := applyPendingDeletes(&cfg.Images, cfg.PendingDeletes)
+			appliedAdded, appliedUpdated := mergeImagesByKey(&cfg.Images, cfg.PendingImages)
+			cfg.PendingImages = nil
+			cfg.PendingDeletes = nil
+			cfg.Remote = config.RemoteConfig{RepoURL: repoURL, Ref: ref, ConfigPath: configPath}
+			config.RefreshSyncedImages(&cfg)
+			lc.Config = cfg
+			if err := lc.Save(); err != nil {
+				return err
+			}
 			if !pushed {
-				fmt.Println("remote config is already up to date")
+				fmt.Printf("pending changes applied locally (deleted=%d added=%d updated=%d); remote already up to date\n", appliedDeleted, appliedAdded, appliedUpdated)
 				return nil
 			}
-			if dryRun {
-				fmt.Println("dry-run enabled; remote repository not modified")
-			} else {
-				fmt.Printf("remote config pushed successfully to %s (%s)\n", repoURL, targetBranch)
-			}
+			fmt.Printf("remote config pushed successfully to %s (%s), changes: deleted=%d added=%d updated=%d\n", repoURL, targetBranch, deletedCount, mergedAdded, mergedUpdated)
 			return nil
 		},
 	}
@@ -502,16 +539,20 @@ func checkRemoteWrite(repoURL, ref, probeBranchPrefix string) error {
 }
 
 type pushConfigOptions struct {
-	DryRun      bool
 	Message     string
 	AuthorName  string
 	AuthorEmail string
 }
 
-func pushConfigToRemote(repoURL, ref, branch, configPath string, cfg config.Config, opts pushConfigOptions) (bool, error) {
+func pushPendingConfigToRemote(repoURL, ref, branch, configPath string, cfg config.Config, opts pushConfigOptions) (bool, int, int, int, error) {
+	staged := normalizePendingImages(cfg.PendingImages)
+	if len(staged) == 0 && len(cfg.PendingDeletes) == 0 {
+		return false, 0, 0, 0, nil
+	}
+
 	tmpDir, err := os.MkdirTemp("", "mirrorpilot-remote-push-*")
 	if err != nil {
-		return false, fmt.Errorf("create temp dir: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
@@ -521,62 +562,76 @@ func pushConfigToRemote(repoURL, ref, branch, configPath string, cfg config.Conf
 	}
 	cloneArgs = append(cloneArgs, repoURL, tmpDir)
 	if _, err := runGit("", cloneArgs...); err != nil {
-		return false, fmt.Errorf("clone remote repo: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("clone remote repo: %w", err)
 	}
 
 	if strings.TrimSpace(branch) == "" {
 		currentBranch, err := runGit(tmpDir, "rev-parse", "--abbrev-ref", "HEAD")
 		if err != nil {
-			return false, fmt.Errorf("resolve current branch: %w", err)
+			return false, 0, 0, 0, fmt.Errorf("resolve current branch: %w", err)
 		}
 		branch = strings.TrimSpace(currentBranch)
 	}
 
-	cfg = config.Normalize(cfg)
-	content, err := yaml.Marshal(cfg)
-	if err != nil {
-		return false, fmt.Errorf("marshal local config: %w", err)
-	}
-
 	absConfigPath := filepath.Join(tmpDir, configPath)
 	current, err := os.ReadFile(absConfigPath)
-	if err == nil && bytes.Equal(current, content) {
-		return false, nil
-	}
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return false, fmt.Errorf("read remote config file: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("read remote config file: %w", err)
+	}
+
+	remoteCfg := config.DefaultConfig()
+	if !errors.Is(err, os.ErrNotExist) {
+		remoteLoaded, loadErr := config.LoadYAML(absConfigPath)
+		if loadErr != nil {
+			return false, 0, 0, 0, fmt.Errorf("load remote config: %w", loadErr)
+		}
+		remoteCfg = remoteLoaded.Config
+	}
+	remoteCfg = config.Normalize(remoteCfg)
+	mergeStagedProfiles(&remoteCfg, cfg, staged)
+	deletedCount := applyPendingDeletes(&remoteCfg.Images, cfg.PendingDeletes)
+	mergedAdded, mergedUpdated := mergeImagesByKey(&remoteCfg.Images, staged)
+	remoteCfg.PendingImages = nil
+	remoteCfg.PendingDeletes = nil
+	config.RefreshSyncedImages(&remoteCfg)
+	if deletedCount+mergedAdded+mergedUpdated == 0 {
+		return false, deletedCount, mergedAdded, mergedUpdated, nil
+	}
+
+	content, err := yaml.Marshal(remoteCfg)
+	if err != nil {
+		return false, 0, 0, 0, fmt.Errorf("marshal merged config: %w", err)
+	}
+	if !errors.Is(err, os.ErrNotExist) && bytes.Equal(current, content) {
+		return false, deletedCount, mergedAdded, mergedUpdated, nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(absConfigPath), 0755); err != nil {
-		return false, fmt.Errorf("create config directory: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("create config directory: %w", err)
 	}
 	if err := os.WriteFile(absConfigPath, content, 0644); err != nil {
-		return false, fmt.Errorf("write config file: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("write config file: %w", err)
 	}
 	if _, err := runGit(tmpDir, "add", configPath); err != nil {
-		return false, fmt.Errorf("git add config file: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("git add config file: %w", err)
 	}
 
 	status, err := runGit(tmpDir, "status", "--porcelain")
 	if err != nil {
-		return false, fmt.Errorf("git status: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("git status: %w", err)
 	}
 	if strings.TrimSpace(status) == "" {
-		return false, nil
-	}
-
-	if opts.DryRun {
-		return true, nil
+		return false, deletedCount, mergedAdded, mergedUpdated, nil
 	}
 
 	if strings.TrimSpace(opts.AuthorName) != "" {
 		if _, err := runGit(tmpDir, "config", "user.name", opts.AuthorName); err != nil {
-			return false, fmt.Errorf("git config user.name: %w", err)
+			return false, 0, 0, 0, fmt.Errorf("git config user.name: %w", err)
 		}
 	}
 	if strings.TrimSpace(opts.AuthorEmail) != "" {
 		if _, err := runGit(tmpDir, "config", "user.email", opts.AuthorEmail); err != nil {
-			return false, fmt.Errorf("git config user.email: %w", err)
+			return false, 0, 0, 0, fmt.Errorf("git config user.email: %w", err)
 		}
 	}
 
@@ -585,12 +640,136 @@ func pushConfigToRemote(repoURL, ref, branch, configPath string, cfg config.Conf
 		commitMessage = "chore: sync mirrorpilot config"
 	}
 	if _, err := runGit(tmpDir, "commit", "-m", commitMessage); err != nil {
-		return false, fmt.Errorf("git commit: %w", err)
+		return false, 0, 0, 0, fmt.Errorf("git commit: %w", err)
 	}
 	if _, err := runGit(tmpDir, "push", "origin", "HEAD:"+branch); err != nil {
-		return false, fmt.Errorf("git push to branch %s: %w", branch, err)
+		return false, 0, 0, 0, fmt.Errorf("git push to branch %s: %w", branch, err)
 	}
-	return true, nil
+	return true, deletedCount, mergedAdded, mergedUpdated, nil
+}
+
+func normalizePendingImages(items []config.Image) []config.Image {
+	staged := make([]config.Image, 0, len(items))
+	for _, img := range items {
+		if strings.TrimSpace(img.Source) == "" || strings.TrimSpace(img.Target) == "" {
+			continue
+		}
+		if img.Profile == "" {
+			img.Profile = config.DefaultProfile
+		}
+		if img.Enabled == nil {
+			img.Enabled = config.BoolPtr(true)
+		}
+		staged = append(staged, img)
+	}
+	return staged
+}
+
+func mergeStagedProfiles(dst *config.Config, src config.Config, staged []config.Image) {
+	config.EnsureDefaultProfile(dst)
+	for _, img := range staged {
+		profile := img.Profile
+		if profile == "" {
+			profile = config.DefaultProfile
+		}
+		if _, ok := dst.Profiles[profile]; ok {
+			continue
+		}
+		if p, ok := src.Profiles[profile]; ok {
+			dst.Profiles[profile] = p
+		}
+	}
+}
+
+func mergeImagesByKey(dst *[]config.Image, incoming []config.Image) (added int, updated int) {
+	index := make(map[string]int, len(*dst))
+	for i, img := range *dst {
+		profile := img.Profile
+		if profile == "" {
+			profile = config.DefaultProfile
+		}
+		index[profile+"|"+img.Source+"|"+img.Target] = i
+	}
+	for _, img := range incoming {
+		profile := img.Profile
+		if profile == "" {
+			profile = config.DefaultProfile
+		}
+		key := profile + "|" + img.Source + "|" + img.Target
+		img.Profile = profile
+		if img.Enabled == nil {
+			img.Enabled = config.BoolPtr(true)
+		}
+		if idx, ok := index[key]; ok {
+			cur := (*dst)[idx]
+			changed := cur.EnabledValue() != img.EnabledValue() ||
+				cur.Notes != img.Notes ||
+				cur.Synced != img.Synced ||
+				cur.CreatedAt != img.CreatedAt ||
+				cur.SyncedAt != img.SyncedAt
+			if changed {
+				(*dst)[idx] = img
+				updated++
+			}
+			continue
+		}
+		*dst = append(*dst, img)
+		index[key] = len(*dst) - 1
+		added++
+	}
+	return added, updated
+}
+
+func applyPendingDeletes(dst *[]config.Image, deletes []config.PendingDelete) (deleted int) {
+	if len(deletes) == 0 || len(*dst) == 0 {
+		return 0
+	}
+	set := make(map[string]struct{}, len(deletes))
+	for _, item := range deletes {
+		set[pendingDeleteKey(item)] = struct{}{}
+	}
+	kept := make([]config.Image, 0, len(*dst))
+	for _, img := range *dst {
+		if _, ok := set[imageKey(img.Profile, img.Source, img.Target)]; ok {
+			deleted++
+			continue
+		}
+		kept = append(kept, img)
+	}
+	*dst = kept
+	return deleted
+}
+
+func printPendingChangesPreview(cfg config.Config) {
+	staged := normalizePendingImages(cfg.PendingImages)
+	headers := []string{"PROFILE", "ENABLED", "SOURCE", "TARGET", "FULL_TARGET"}
+	rows := make([][]string, 0, len(staged))
+	for _, item := range staged {
+		rows = append(rows, []string{
+			item.Profile,
+			fmt.Sprintf("%t", item.EnabledValue()),
+			item.Source,
+			item.Target,
+			buildFullTarget(cfg, item.Profile, item.Target),
+		})
+	}
+	fmt.Println("staged additions (pending_images):")
+	fmt.Print(renderGridTable(headers, rows, 44))
+	if len(cfg.PendingDeletes) > 0 {
+		delHeaders := []string{"PROFILE", "SOURCE", "TARGET", "FULL_TARGET"}
+		delRows := make([][]string, 0, len(cfg.PendingDeletes))
+		for _, item := range cfg.PendingDeletes {
+			p := normalizedProfile(item.Profile)
+			delRows = append(delRows, []string{
+				p,
+				item.Source,
+				item.Target,
+				buildFullTarget(cfg, p, item.Target),
+			})
+		}
+		fmt.Println("staged deletions (pending_deletes):")
+		fmt.Print(renderGridTable(delHeaders, delRows, 44))
+	}
 }
 
 func runGit(dir string, args ...string) (string, error) {

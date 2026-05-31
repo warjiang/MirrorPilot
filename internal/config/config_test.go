@@ -73,6 +73,43 @@ func TestValidate_AllowsDisabledDuplicates(t *testing.T) {
 	}
 }
 
+func TestValidate_DetectsDuplicatesAcrossImagesAndPending(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Images = []Image{
+		{
+			Source:  "alpine:latest",
+			Target:  "alpine:latest",
+			Profile: DefaultProfile,
+			Enabled: BoolPtr(true),
+		},
+	}
+
+	cfg.PendingImages = []Image{
+		{
+			Source:  "alpine:latest",
+			Target:  "alpine:latest",
+			Profile: DefaultProfile,
+			Enabled: BoolPtr(true),
+		},
+	}
+
+	errs := Validate(cfg)
+	if len(errs) == 0 {
+		t.Fatalf("expected duplicate validation error across images and pending_images")
+	}
+}
+
+func TestValidateRejectsInvalidPendingDelete(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.PendingDeletes = []PendingDelete{
+		{Source: "nginx:1.27", Target: "", Profile: DefaultProfile},
+	}
+	errs := Validate(cfg)
+	if len(errs) == 0 {
+		t.Fatalf("expected pending_deletes validation error")
+	}
+}
+
 func TestNormalizeBuildsSyncedImages(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Images = []Image{
