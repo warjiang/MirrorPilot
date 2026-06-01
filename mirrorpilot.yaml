@@ -12,6 +12,10 @@ images:
     - source: warjiang/lastbeat:0.1.7
       target: warjiang-lastbeat:0.1.7
       profile: default
+      enabled: true
+      synced: true
+      created_at: "2026-06-01T12:32:02Z"
+      synced_at: "2026-06-01T12:32:02Z"
     - source: warjiang/lastbeat:0.1.6
       target: warjiang-lastbeat:0.1.6
       profile: default
@@ -1615,3 +1619,8 @@ synced_images:
       target: warjiang-lastbeat:0.1.6
       created_at: "2026-05-29T10:55:16Z"
       synced_at: "2026-05-29T10:55:16Z"
+    - profile: default
+      source: warjiang/lastbeat:0.1.7
+      target: warjiang-lastbeat:0.1.7
+      created_at: "2026-06-01T12:32:02Z"
+      synced_at: "2026-06-01T12:32:02Z"
