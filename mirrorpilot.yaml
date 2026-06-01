@@ -9,6 +9,9 @@ profiles:
         username_env: DEST_REGISTRY_USER
         password_env: DEST_REGISTRY_PASSWORD
 images:
+    - source: warjiang/lastbeat:0.1.7
+      target: warjiang-lastbeat:0.1.7
+      profile: default
     - source: warjiang/lastbeat:0.1.6
       target: warjiang-lastbeat:0.1.6
       profile: default
