@@ -1,34 +1,29 @@
 # MirrorPilot
 
 A fork-friendly image mirror repo with:
-- a Go CLI (`mirrorpilot`) to manage mirror entries and sync state
-- GitHub Actions to run real sync jobs in CI only
-- optional migration from legacy `images.list` to YAML
+- a Go CLI (`mirrorpilot`) to manage staged mirror changes and remote config sync
+- GitHub Actions to run sync in CI and write back sync status
 
 ## Quick start
 
 Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues from older Go toolchains.
 
-1. Configure repository secrets:
-   - `DEST_REGISTRY_USER`
-   - `DEST_REGISTRY_PASSWORD`
-
-   Target registry is configured in `profiles.<name>.registry` inside config file.
-
-2. Validate config:
+1. Validate config:
 
 ```bash
 go run ./cmd/mirrorpilot validate
 ```
 
-3. Manage entries with CLI:
+2. Manage entries with CLI:
 
 ```bash
+go run ./cmd/mirrorpilot add --source nginx:1.27
+# or explicitly set target
 go run ./cmd/mirrorpilot add --source nginx:1.27 --target mirror/nginx:1.27
-go run ./cmd/mirrorpilot list --all
+go run ./cmd/mirrorpilot delete --source nginx:1.27
+go run ./cmd/mirrorpilot status
+go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
 ```
-
-4. Push to `main` to trigger CI sync. CI calls CLI `sync` and commits status updates back to config YAML.
 
 ## Config
 
@@ -57,14 +52,13 @@ images:
     created_at: 2026-05-18T00:00:00Z
     synced: false
     synced_at: ""
-pending_images: []
-pending_deletes: []
+pending_changes: []
 synced_images: []
 ```
 
 ### Multiple profiles and credentials
 
-Each profile should point to its own credential env names. During `sync`, the CLI reads `username_env/password_env` from the image's selected `profile`.
+Each profile should point to its own credential env names for your downstream sync runtime.
 
 ```yaml
 profiles:
@@ -94,31 +88,25 @@ export REG_B_USER=yyy
 export REG_B_PASS=yyy
 ```
 
-### Legacy migration
-
-Legacy files are no longer auto-loaded. If you still have `images.list`, migrate explicitly:
-
-```bash
-go run ./cmd/mirrorpilot migrate --from images.list --to mirrorpilot.yaml
-```
-
 ## CLI commands
 
-- `add`: stage image mapping into `pending_images` (does not directly modify `images`)
-- `delete` (`remove` alias): stage mapping deletion into `pending_deletes`
-- `mark`: set `synced` state manually
-- `list`: list entries (`--all`, `--pending`, `--synced`)
-- `synced`: list synced image records from `synced_images`
+- `add`: stage image mapping into `pending_changes` with `action=add` (does not directly modify `images`); when `--target` is omitted, it is derived from `--source`; `--source/--target` are validated as container image references
+- `delete` (`remove` alias): stage mapping deletion into `pending_changes` with `action=delete`
+- `status`: show local staged status (`pending_changes` / stats)
 - `search`: full-screen table TUI (`/` to enter vim-like search mode)
+- `sync`: sync images to target registry (CI only)
 - `validate`: validate config
-- `migrate`: convert `images.list` to YAML
-- `sync`: execute actual mirror sync (CI only)
 - `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
 - `remote fetch`: fetch remote image list and merge into local config (`--forced` can force local to match remote)
 - `remote check`: verify remote repo read/write readiness
-- `remote push-config`: `--dry-run` shows staged `pending_images` + `pending_deletes`; real push applies staged deletes and adds to latest remote config, then pushes
+- `remote push-config`: `--dry-run` shows staged `pending_changes`; real push applies staged deletes and adds to latest remote config, then pushes
 
-`add` / `delete` (`remove`) / `list` / `mark` / `search` / `synced` require a configured remote repository. Configure it first with `remote set`.
+`add` / `delete` (`remove`) / `search` require a configured remote repository. Configure it first with `remote set`.
+
+Default target derivation for `add --source` (when `--target` is omitted):
+- `ghcr.io/org/team/app:1.0.0` -> `team-app:1.0.0`
+- `team/app:1.0.0` -> `team/app:1.0.0`
+- `app:1.0.0` -> `app:1.0.0`
 
 `remote.ref` defaults to `main` and `remote.config_path` defaults to `mirrorpilot.yaml` when omitted.
 
@@ -130,22 +118,15 @@ go run ./cmd/mirrorpilot remote fetch --merge
 go run ./cmd/mirrorpilot remote fetch --merge --forced
 go run ./cmd/mirrorpilot remote check
 go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
+go run ./cmd/mirrorpilot status --output table
 go run ./cmd/mirrorpilot search
-go run ./cmd/mirrorpilot synced --output table
 ```
-
-`list` and `synced` hide `full_source` and `full_target` by default. Use `--full-paths` when you want to include them.
-`synced --output table` renders a bordered table layout for easier scanning in terminal.
-
-`sync` is restricted to CI (`CI=true`) so real sync work stays in remote workflow.
 
 ## CI behavior
 
-- `push` to `main`: incremental sync (only `enabled=true && synced=false`)
-- sync workflow downloads and runs released CLI binary from GitHub Releases (does not build from source)
-- `workflow_dispatch` with `resync_all=true`: full re-sync (`--all`)
-- `workflow_dispatch` supports `cli_version` to pin a specific released CLI tag; empty means latest release
-- after successful sync, CI updates `synced/last_synced_at` and commits back with `[skip ci]`
+- `push` to `main`: validate config and run `mirrorpilot sync`
+- `mirrorpilot sync` is CI-only; local execution is blocked unless `CI=true`
+- after successful sync, CI commits status updates back to config with `[skip ci]`
 
 ## Release CLI
 

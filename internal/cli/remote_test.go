@@ -54,7 +54,8 @@ func TestPushPendingConfigToRemote(t *testing.T) {
 	repoURL := setupGitRepo(t)
 
 	cfg := config.DefaultConfig()
-	cfg.PendingImages = append(cfg.PendingImages, config.Image{
+	cfg.PendingChanges = append(cfg.PendingChanges, config.PendingChange{
+		Action:  config.PendingActionAdd,
 		Source:  "nginx:1.27",
 		Target:  "mirror/nginx:1.27",
 		Profile: config.DefaultProfile,
@@ -89,8 +90,8 @@ func TestPushPendingConfigToRemote(t *testing.T) {
 	if !strings.Contains(content, "nginx:1.27") {
 		t.Fatalf("expected pushed config to contain image, got: %s", content)
 	}
-	if strings.Contains(content, "pending_images:") {
-		t.Fatalf("expected pending_images to be cleared in remote config, got: %s", content)
+	if strings.Contains(content, "pending_changes:") {
+		t.Fatalf("expected pending_changes to be cleared in remote config, got: %s", content)
 	}
 }
 
@@ -98,7 +99,8 @@ func TestPushPendingDeleteToRemote(t *testing.T) {
 	repoURL := setupGitRepo(t)
 
 	addCfg := config.DefaultConfig()
-	addCfg.PendingImages = append(addCfg.PendingImages, config.Image{
+	addCfg.PendingChanges = append(addCfg.PendingChanges, config.PendingChange{
+		Action:  config.PendingActionAdd,
 		Source:  "nginx:1.27",
 		Target:  "mirror/nginx:1.27",
 		Profile: config.DefaultProfile,
@@ -113,7 +115,8 @@ func TestPushPendingDeleteToRemote(t *testing.T) {
 	}
 
 	delCfg := config.DefaultConfig()
-	delCfg.PendingDeletes = append(delCfg.PendingDeletes, config.PendingDelete{
+	delCfg.PendingChanges = append(delCfg.PendingChanges, config.PendingChange{
+		Action:  config.PendingActionDelete,
 		Source:  "nginx:1.27",
 		Target:  "mirror/nginx:1.27",
 		Profile: config.DefaultProfile,
@@ -143,8 +146,8 @@ func TestPushPendingDeleteToRemote(t *testing.T) {
 	if strings.Contains(content, "nginx:1.27") {
 		t.Fatalf("expected pushed config to remove image, got: %s", content)
 	}
-	if strings.Contains(content, "pending_deletes:") {
-		t.Fatalf("expected pending_deletes to be cleared in remote config, got: %s", content)
+	if strings.Contains(content, "pending_changes:") {
+		t.Fatalf("expected pending_changes to be cleared in remote config, got: %s", content)
 	}
 }
 
@@ -191,11 +194,9 @@ func TestForceRemoteIntoLocal_ReplacesAllLocalFields(t *testing.T) {
 	local.Images = []config.Image{
 		{Source: "local:1", Target: "local:1", Profile: config.DefaultProfile, Enabled: config.BoolPtr(true)},
 	}
-	local.PendingImages = []config.Image{
-		{Source: "pending:1", Target: "pending:1", Profile: config.DefaultProfile, Enabled: config.BoolPtr(true)},
-	}
-	local.PendingDeletes = []config.PendingDelete{
-		{Source: "del:1", Target: "del:1", Profile: config.DefaultProfile},
+	local.PendingChanges = []config.PendingChange{
+		{Action: config.PendingActionAdd, Source: "pending:1", Target: "pending:1", Profile: config.DefaultProfile, Enabled: config.BoolPtr(true)},
+		{Action: config.PendingActionDelete, Source: "del:1", Target: "del:1", Profile: config.DefaultProfile},
 	}
 
 	remote := config.DefaultConfig()
@@ -207,19 +208,15 @@ func TestForceRemoteIntoLocal_ReplacesAllLocalFields(t *testing.T) {
 	remote.Images = []config.Image{
 		{Source: "remote:1", Target: "remote:1", Profile: config.DefaultProfile, Enabled: config.BoolPtr(true)},
 	}
-	remote.PendingImages = nil
-	remote.PendingDeletes = nil
+	remote.PendingChanges = nil
 
 	forceRemoteIntoLocal(&local, remote)
 
 	if len(local.Images) != 1 || local.Images[0].Source != "remote:1" {
 		t.Fatalf("expected local images replaced by remote images, got %+v", local.Images)
 	}
-	if len(local.PendingImages) != 0 {
-		t.Fatalf("expected pending_images replaced by remote, got %d", len(local.PendingImages))
-	}
-	if len(local.PendingDeletes) != 0 {
-		t.Fatalf("expected pending_deletes replaced by remote, got %d", len(local.PendingDeletes))
+	if len(local.PendingChanges) != 0 {
+		t.Fatalf("expected pending_changes replaced by remote, got %d", len(local.PendingChanges))
 	}
 	if got := local.Profiles[config.DefaultProfile].Registry; got != "registry.remote.example.com/ns" {
 		t.Fatalf("expected profile registry from remote, got %s", got)

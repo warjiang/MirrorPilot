@@ -84,8 +84,9 @@ func TestValidate_DetectsDuplicatesAcrossImagesAndPending(t *testing.T) {
 		},
 	}
 
-	cfg.PendingImages = []Image{
+	cfg.PendingChanges = []PendingChange{
 		{
+			Action:  PendingActionAdd,
 			Source:  "alpine:latest",
 			Target:  "alpine:latest",
 			Profile: DefaultProfile,
@@ -95,18 +96,18 @@ func TestValidate_DetectsDuplicatesAcrossImagesAndPending(t *testing.T) {
 
 	errs := Validate(cfg)
 	if len(errs) == 0 {
-		t.Fatalf("expected duplicate validation error across images and pending_images")
+		t.Fatalf("expected duplicate validation error across images and pending_changes")
 	}
 }
 
 func TestValidateRejectsInvalidPendingDelete(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.PendingDeletes = []PendingDelete{
-		{Source: "nginx:1.27", Target: "", Profile: DefaultProfile},
+	cfg.PendingChanges = []PendingChange{
+		{Action: PendingActionDelete, Source: "nginx:1.27", Target: "", Profile: DefaultProfile},
 	}
 	errs := Validate(cfg)
 	if len(errs) == 0 {
-		t.Fatalf("expected pending_deletes validation error")
+		t.Fatalf("expected pending_changes validation error")
 	}
 }
 
