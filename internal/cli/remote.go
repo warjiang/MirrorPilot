@@ -2,13 +2,11 @@ package cli
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -202,144 +200,6 @@ func mergeRemoteIntoLocal(local *config.Config, remote config.Config) (added int
 	return added, syncedUpdated, profileAdded, profileUpdated
 }
 
-func newSyncedCmd(opts *options) *cobra.Command {
-	var output string
-	var showFullPaths bool
-	cmd := &cobra.Command{
-		Use:   "synced",
-		Short: "Show synced image state from config",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			lc, err := config.Load(opts.ConfigPath)
-			if err != nil {
-				return err
-			}
-			cfg := config.Normalize(lc.Config)
-			if err := ensureRemoteConfigured(cfg); err != nil {
-				return err
-			}
-			items := cfg.SyncedImages
-			sort.Slice(items, func(i, j int) bool {
-				if items[i].Profile != items[j].Profile {
-					return items[i].Profile < items[j].Profile
-				}
-				if items[i].Source != items[j].Source {
-					return items[i].Source < items[j].Source
-				}
-				return items[i].Target < items[j].Target
-			})
-
-			viewItems := make([]syncedImageView, 0, len(items))
-			for _, item := range items {
-				viewItems = append(viewItems, syncedImageView{
-					Profile:    item.Profile,
-					Source:     item.Source,
-					Target:     item.Target,
-					CreatedAt:  item.CreatedAt,
-					SyncedAt:   item.SyncedAt,
-					FullSource: buildFullSource(item.Source),
-					FullTarget: buildFullTarget(cfg, item.Profile, item.Target),
-				})
-			}
-
-			switch output {
-			case "table":
-				headers := []string{"PROFILE", "SOURCE", "TARGET", "CREATED_AT", "SYNCED_AT"}
-				if showFullPaths {
-					headers = []string{"PROFILE", "SOURCE", "TARGET", "FULL_SOURCE", "FULL_TARGET", "CREATED_AT", "SYNCED_AT"}
-				}
-				rows := make([][]string, 0, len(viewItems))
-				for _, item := range viewItems {
-					if showFullPaths {
-						rows = append(rows, []string{
-							item.Profile,
-							item.Source,
-							item.Target,
-							item.FullSource,
-							item.FullTarget,
-							item.CreatedAt,
-							item.SyncedAt,
-						})
-					} else {
-						rows = append(rows, []string{
-							item.Profile,
-							item.Source,
-							item.Target,
-							item.CreatedAt,
-							item.SyncedAt,
-						})
-					}
-				}
-				fmt.Print(renderGridTable(headers, rows, 44))
-			case "json":
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				if !showFullPaths {
-					basic := make([]syncedImageBasicView, 0, len(viewItems))
-					for _, item := range viewItems {
-						basic = append(basic, syncedImageBasicView{
-							Profile:   item.Profile,
-							Source:    item.Source,
-							Target:    item.Target,
-							CreatedAt: item.CreatedAt,
-							SyncedAt:  item.SyncedAt,
-						})
-					}
-					return enc.Encode(basic)
-				}
-				return enc.Encode(viewItems)
-			case "yaml":
-				if !showFullPaths {
-					basic := make([]syncedImageBasicView, 0, len(viewItems))
-					for _, item := range viewItems {
-						basic = append(basic, syncedImageBasicView{
-							Profile:   item.Profile,
-							Source:    item.Source,
-							Target:    item.Target,
-							CreatedAt: item.CreatedAt,
-							SyncedAt:  item.SyncedAt,
-						})
-					}
-					b, err := yaml.Marshal(basic)
-					if err != nil {
-						return err
-					}
-					fmt.Print(string(b))
-					break
-				}
-				b, err := yaml.Marshal(viewItems)
-				if err != nil {
-					return err
-				}
-				fmt.Print(string(b))
-			default:
-				return errors.New("--output must be one of: table, json, yaml")
-			}
-			return nil
-		},
-	}
-	cmd.Flags().StringVar(&output, "output", "table", "Output format: table|json|yaml")
-	cmd.Flags().BoolVar(&showFullPaths, "full-paths", false, "Include full_source/full_target columns/fields")
-	return cmd
-}
-
-type syncedImageView struct {
-	Profile    string `json:"profile" yaml:"profile"`
-	Source     string `json:"source" yaml:"source"`
-	Target     string `json:"target" yaml:"target"`
-	CreatedAt  string `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	SyncedAt   string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
-	FullSource string `json:"full_source" yaml:"full_source"`
-	FullTarget string `json:"full_target" yaml:"full_target"`
-}
-
-type syncedImageBasicView struct {
-	Profile   string `json:"profile" yaml:"profile"`
-	Source    string `json:"source" yaml:"source"`
-	Target    string `json:"target" yaml:"target"`
-	CreatedAt string `json:"created_at,omitempty" yaml:"created_at,omitempty"`
-	SyncedAt  string `json:"synced_at,omitempty" yaml:"synced_at,omitempty"`
-}
-
 func newRemoteCheckCmd(opts *options) *cobra.Command {
 	var repoURL string
 	var ref string
@@ -415,8 +275,8 @@ func newRemotePushConfigCmd(opts *options) *cobra.Command {
 			if strings.TrimSpace(configPath) == "" {
 				configPath = config.DefaultConfigPath
 			}
-			if len(cfg.PendingImages) == 0 && len(cfg.PendingDeletes) == 0 {
-				fmt.Println("no staged changes in pending_images/pending_deletes; nothing to push")
+			if len(cfg.PendingChanges) == 0 {
+				fmt.Println("no staged changes in pending_changes; nothing to push")
 				return nil
 			}
 			if dryRun {
@@ -438,10 +298,10 @@ func newRemotePushConfigCmd(opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			appliedDeleted := applyPendingDeletes(&cfg.Images, cfg.PendingDeletes)
-			appliedAdded, appliedUpdated := mergeImagesByKey(&cfg.Images, cfg.PendingImages)
-			cfg.PendingImages = nil
-			cfg.PendingDeletes = nil
+			pendingAdds, pendingDeletes := splitPendingChanges(cfg.PendingChanges)
+			appliedDeleted := applyPendingDeletes(&cfg.Images, pendingDeletes)
+			appliedAdded, appliedUpdated := mergeImagesByKey(&cfg.Images, pendingAdds)
+			cfg.PendingChanges = nil
 			cfg.Remote = config.RemoteConfig{RepoURL: repoURL, Ref: ref, ConfigPath: configPath}
 			config.RefreshSyncedImages(&cfg)
 			lc.Config = cfg
@@ -545,8 +405,9 @@ type pushConfigOptions struct {
 }
 
 func pushPendingConfigToRemote(repoURL, ref, branch, configPath string, cfg config.Config, opts pushConfigOptions) (bool, int, int, int, error) {
-	staged := normalizePendingImages(cfg.PendingImages)
-	if len(staged) == 0 && len(cfg.PendingDeletes) == 0 {
+	pendingAdds, pendingDeletes := splitPendingChanges(cfg.PendingChanges)
+	staged := normalizePendingImages(pendingAdds)
+	if len(staged) == 0 && len(pendingDeletes) == 0 {
 		return false, 0, 0, 0, nil
 	}
 
@@ -589,10 +450,9 @@ func pushPendingConfigToRemote(repoURL, ref, branch, configPath string, cfg conf
 	}
 	remoteCfg = config.Normalize(remoteCfg)
 	mergeStagedProfiles(&remoteCfg, cfg, staged)
-	deletedCount := applyPendingDeletes(&remoteCfg.Images, cfg.PendingDeletes)
+	deletedCount := applyPendingDeletes(&remoteCfg.Images, pendingDeletes)
 	mergedAdded, mergedUpdated := mergeImagesByKey(&remoteCfg.Images, staged)
-	remoteCfg.PendingImages = nil
-	remoteCfg.PendingDeletes = nil
+	remoteCfg.PendingChanges = nil
 	config.RefreshSyncedImages(&remoteCfg)
 	if deletedCount+mergedAdded+mergedUpdated == 0 {
 		return false, deletedCount, mergedAdded, mergedUpdated, nil
@@ -720,13 +580,13 @@ func mergeImagesByKey(dst *[]config.Image, incoming []config.Image) (added int, 
 	return added, updated
 }
 
-func applyPendingDeletes(dst *[]config.Image, deletes []config.PendingDelete) (deleted int) {
+func applyPendingDeletes(dst *[]config.Image, deletes []config.PendingChange) (deleted int) {
 	if len(deletes) == 0 || len(*dst) == 0 {
 		return 0
 	}
 	set := make(map[string]struct{}, len(deletes))
 	for _, item := range deletes {
-		set[pendingDeleteKey(item)] = struct{}{}
+		set[pendingChangeKey(item)] = struct{}{}
 	}
 	kept := make([]config.Image, 0, len(*dst))
 	for _, img := range *dst {
@@ -741,11 +601,13 @@ func applyPendingDeletes(dst *[]config.Image, deletes []config.PendingDelete) (d
 }
 
 func printPendingChangesPreview(cfg config.Config) {
-	staged := normalizePendingImages(cfg.PendingImages)
-	headers := []string{"PROFILE", "ENABLED", "SOURCE", "TARGET", "FULL_TARGET"}
-	rows := make([][]string, 0, len(staged))
+	pendingAdds, pendingDeletes := splitPendingChanges(cfg.PendingChanges)
+	staged := normalizePendingImages(pendingAdds)
+	headers := []string{"ACTION", "PROFILE", "ENABLED", "SOURCE", "TARGET", "FULL_TARGET"}
+	rows := make([][]string, 0, len(staged)+len(pendingDeletes))
 	for _, item := range staged {
 		rows = append(rows, []string{
+			"ADD",
 			item.Profile,
 			fmt.Sprintf("%t", item.EnabledValue()),
 			item.Source,
@@ -753,23 +615,19 @@ func printPendingChangesPreview(cfg config.Config) {
 			buildFullTarget(cfg, item.Profile, item.Target),
 		})
 	}
-	fmt.Println("staged additions (pending_images):")
-	fmt.Print(renderGridTable(headers, rows, 44))
-	if len(cfg.PendingDeletes) > 0 {
-		delHeaders := []string{"PROFILE", "SOURCE", "TARGET", "FULL_TARGET"}
-		delRows := make([][]string, 0, len(cfg.PendingDeletes))
-		for _, item := range cfg.PendingDeletes {
-			p := normalizedProfile(item.Profile)
-			delRows = append(delRows, []string{
-				p,
-				item.Source,
-				item.Target,
-				buildFullTarget(cfg, p, item.Target),
-			})
-		}
-		fmt.Println("staged deletions (pending_deletes):")
-		fmt.Print(renderGridTable(delHeaders, delRows, 44))
+	for _, item := range pendingDeletes {
+		p := normalizedProfile(item.Profile)
+		rows = append(rows, []string{
+			"DELETE",
+			p,
+			"",
+			item.Source,
+			item.Target,
+			buildFullTarget(cfg, p, item.Target),
+		})
 	}
+	fmt.Println("staged changes (pending_changes):")
+	fmt.Print(renderGridTable(headers, rows, 44))
 }
 
 func runGit(dir string, args ...string) (string, error) {

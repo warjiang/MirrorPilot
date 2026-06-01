@@ -24,8 +24,7 @@ type Config struct {
 	Remote         RemoteConfig               `yaml:"remote,omitempty"`
 	Profiles       map[string]RegistryProfile `yaml:"profiles"`
 	Images         []Image                    `yaml:"images"`
-	PendingImages  []Image                    `yaml:"pending_images,omitempty"`
-	PendingDeletes []PendingDelete            `yaml:"pending_deletes,omitempty"`
+	PendingChanges []PendingChange            `yaml:"pending_changes,omitempty"`
 	SyncedImages   []SyncedImage              `yaml:"synced_images,omitempty"`
 }
 
@@ -47,10 +46,18 @@ type Image struct {
 	Notes        string `yaml:"notes,omitempty"`
 }
 
-type PendingDelete struct {
+const (
+	PendingActionAdd    = "add"
+	PendingActionDelete = "delete"
+)
+
+type PendingChange struct {
+	Action  string `yaml:"action"`
 	Source  string `yaml:"source"`
 	Target  string `yaml:"target"`
 	Profile string `yaml:"profile,omitempty"`
+	Enabled *bool  `yaml:"enabled,omitempty"`
+	Notes   string `yaml:"notes,omitempty"`
 }
 
 type RemoteConfig struct {
@@ -190,31 +197,13 @@ func Normalize(cfg Config) Config {
 			}
 		}
 	}
-	for i := range cfg.PendingImages {
-		if cfg.PendingImages[i].Profile == "" {
-			cfg.PendingImages[i].Profile = DefaultProfile
+	for i := range cfg.PendingChanges {
+		cfg.PendingChanges[i].Action = strings.ToLower(strings.TrimSpace(cfg.PendingChanges[i].Action))
+		if cfg.PendingChanges[i].Profile == "" {
+			cfg.PendingChanges[i].Profile = DefaultProfile
 		}
-		if cfg.PendingImages[i].Enabled == nil {
-			cfg.PendingImages[i].Enabled = BoolPtr(true)
-		}
-		if cfg.PendingImages[i].SyncedAt == "" && cfg.PendingImages[i].LastSyncedAt != "" {
-			cfg.PendingImages[i].SyncedAt = cfg.PendingImages[i].LastSyncedAt
-		}
-		cfg.PendingImages[i].LastSyncedAt = ""
-		if cfg.PendingImages[i].CreatedAt != "" {
-			if t, err := time.Parse(time.RFC3339, cfg.PendingImages[i].CreatedAt); err == nil {
-				cfg.PendingImages[i].CreatedAt = t.UTC().Format(time.RFC3339)
-			}
-		}
-		if cfg.PendingImages[i].SyncedAt != "" {
-			if t, err := time.Parse(time.RFC3339, cfg.PendingImages[i].SyncedAt); err == nil {
-				cfg.PendingImages[i].SyncedAt = t.UTC().Format(time.RFC3339)
-			}
-		}
-	}
-	for i := range cfg.PendingDeletes {
-		if cfg.PendingDeletes[i].Profile == "" {
-			cfg.PendingDeletes[i].Profile = DefaultProfile
+		if cfg.PendingChanges[i].Action == PendingActionAdd && cfg.PendingChanges[i].Enabled == nil {
+			cfg.PendingChanges[i].Enabled = BoolPtr(true)
 		}
 	}
 	for i := range cfg.SyncedImages {
@@ -331,51 +320,36 @@ func Validate(cfg Config) []error {
 		}
 	}
 
-	for idx, img := range cfg.PendingImages {
-		if strings.TrimSpace(img.Source) == "" {
-			errs = append(errs, fmt.Errorf("pending_images[%d] has empty source", idx))
+	for idx, ch := range cfg.PendingChanges {
+		action := strings.ToLower(strings.TrimSpace(ch.Action))
+		if action != PendingActionAdd && action != PendingActionDelete {
+			errs = append(errs, fmt.Errorf("pending_changes[%d] has invalid action %q", idx, ch.Action))
+			continue
 		}
-		if strings.TrimSpace(img.Target) == "" {
-			errs = append(errs, fmt.Errorf("pending_images[%d] has empty target", idx))
+		if strings.TrimSpace(ch.Source) == "" {
+			errs = append(errs, fmt.Errorf("pending_changes[%d] has empty source", idx))
 		}
-		if img.Profile == "" {
-			img.Profile = DefaultProfile
+		if strings.TrimSpace(ch.Target) == "" {
+			errs = append(errs, fmt.Errorf("pending_changes[%d] has empty target", idx))
 		}
-		if _, ok := cfg.Profiles[img.Profile]; !ok {
-			errs = append(errs, fmt.Errorf("pending_images[%d] references missing profile %q", idx, img.Profile))
+		if strings.TrimSpace(ch.Profile) == "" {
+			errs = append(errs, fmt.Errorf("pending_changes[%d] has empty profile", idx))
 		}
-		key := img.Profile + "|" + img.Source + "|" + img.Target
-		if img.EnabledValue() {
-			if _, ok := seenEnabled[key]; ok {
-				errs = append(errs, fmt.Errorf("duplicate enabled image entry %q", key))
+		if _, ok := cfg.Profiles[ch.Profile]; !ok {
+			errs = append(errs, fmt.Errorf("pending_changes[%d] references missing profile %q", idx, ch.Profile))
+		}
+		if action == PendingActionAdd {
+			enabled := true
+			if ch.Enabled != nil {
+				enabled = *ch.Enabled
 			}
-			seenEnabled[key] = struct{}{}
-		}
-
-		if img.CreatedAt != "" {
-			if _, err := time.Parse(time.RFC3339, img.CreatedAt); err != nil {
-				errs = append(errs, fmt.Errorf("pending_images[%d] has invalid created_at %q", idx, img.CreatedAt))
+			key := ch.Profile + "|" + ch.Source + "|" + ch.Target
+			if enabled {
+				if _, ok := seenEnabled[key]; ok {
+					errs = append(errs, fmt.Errorf("duplicate enabled image entry %q", key))
+				}
+				seenEnabled[key] = struct{}{}
 			}
-		}
-		if img.SyncedAt != "" {
-			if _, err := time.Parse(time.RFC3339, img.SyncedAt); err != nil {
-				errs = append(errs, fmt.Errorf("pending_images[%d] has invalid synced_at %q", idx, img.SyncedAt))
-			}
-		}
-	}
-
-	for idx, del := range cfg.PendingDeletes {
-		if strings.TrimSpace(del.Source) == "" {
-			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty source", idx))
-		}
-		if strings.TrimSpace(del.Target) == "" {
-			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty target", idx))
-		}
-		if strings.TrimSpace(del.Profile) == "" {
-			errs = append(errs, fmt.Errorf("pending_deletes[%d] has empty profile", idx))
-		}
-		if _, ok := cfg.Profiles[del.Profile]; !ok {
-			errs = append(errs, fmt.Errorf("pending_deletes[%d] references missing profile %q", idx, del.Profile))
 		}
 	}
 
