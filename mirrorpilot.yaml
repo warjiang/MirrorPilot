@@ -1460,6 +1460,10 @@ images:
       synced: true
       created_at: "2026-05-31T16:49:01Z"
       synced_at: "2026-05-31T16:49:01Z"
+    - source: mcr.microsoft.com/playwright:v1.60.0-jammy
+      target: playwright:v1.60.0-jammy
+      profile: default
+      enabled: true
 synced_images:
     - profile: default
       source: bitnami/kubectl:latest
