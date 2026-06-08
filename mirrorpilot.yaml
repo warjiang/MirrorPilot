@@ -111,7 +111,7 @@ images:
       enabled: true
       synced: true
       synced_at: "2026-05-18T09:44:19Z"
-    - source: bitnami/kubectl:latest
+    - source: soldevelo/kubectl:latest
       target: bitnami-kubectl:latest
       profile: default
       enabled: true
@@ -781,16 +781,16 @@ images:
       target: bitnami/mysqld-exporter:0.15.1-debian-12-r16
       profile: default
       enabled: false
-    - source: bitnami/os-shell:12-debian-12-r21
-      target: bitnami/os-shell:12-debian-12-r21
+    - source: soldevelo/os-shell:12-debian-12-r2
+      target: soldevelo/os-shell:12-debian-12-r2
       profile: default
       enabled: false
     - source: bitnami/rabbitmq:3.10.8-debian-11-r4
       target: bitnami/rabbitmq:3.10.8-debian-11-r4
       profile: default
       enabled: false
-    - source: bitnami/redis:6.2.7-debian-11-r11
-      target: bitnami/redis:6.2.7-debian-11-r11
+    - source: soldevelo/redis:6.2.16-debian-12-r0
+      target: soldevelo/redis:6.2.16-debian-12-r0
       profile: default
       enabled: false
     - source: bitnami/redis-exporter:1.43.0-debian-11-r4
@@ -1125,12 +1125,12 @@ images:
       target: jumpserver/koko:v4.10.0-ce
       profile: default
       enabled: false
-    - source: bitnami/os-shell:12-debian-12-r43
-      target: bitnami/os-shell:12-debian-12-r43
+    - source: soldevelo/os-shell:12-debian-12-r2
+      target: soldevelo/os-shell:12-debian-12-r2
       profile: default
       enabled: false
-    - source: bitnami/postgres-exporter:0.17.1-debian-12-r6
-      target: bitnami/postgres-exporter:0.17.1-debian-12-r6
+    - source: soldevelo/postgres-exporter:0.17.1-debian-12-r0
+      target: soldevelo/postgres-exporter:0.17.1-debian-12-r0
       profile: default
       enabled: false
     - source: bitnami/postgresql:17.4.0-debian-12-r17
@@ -1476,7 +1476,7 @@ images:
       synced_at: "2026-06-01T01:22:02Z"
 synced_images:
     - profile: default
-      source: bitnami/kubectl:latest
+      source: soldevelo/kubectl:latest
       target: bitnami-kubectl:latest
       synced_at: "2026-05-18T09:44:19Z"
     - profile: default
