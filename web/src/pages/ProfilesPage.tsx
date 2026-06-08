@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, Wifi } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Plus, Pencil, Trash2, Wifi, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,8 +31,23 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
   const [form, setForm] = useState<FormState>(emptyForm)
   const [error, setError] = useState<string | null>(null)
   const [checkResults, setCheckResults] = useState<Record<string, { loading: boolean; result?: CheckRegistryResponse; error?: string }>>({})
+  const [searchQuery, setSearchQuery] = useState('')
 
   const profileNames = Object.keys(config.profiles)
+
+  const filteredProfiles = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return profileNames
+    return profileNames.filter((name) => {
+      const p = config.profiles[name]
+      return (
+        name.toLowerCase().includes(q) ||
+        p.registry.toLowerCase().includes(q) ||
+        (p.usernameEnv?.toLowerCase().includes(q) ?? false) ||
+        (p.passwordEnv?.toLowerCase().includes(q) ?? false)
+      )
+    })
+  }, [profileNames, config.profiles, searchQuery])
 
   function startCreate() {
     setCreating(true)
@@ -152,7 +167,25 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             </p>
           )}
 
-          {profileNames.map((name) => {
+          {profileNames.length > 0 && (
+            <div className="relative">
+              <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+              <Input
+                placeholder="Filter by name, registry..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+
+          {profileNames.length > 0 && filteredProfiles.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No profiles match "{searchQuery}".
+            </p>
+          )}
+
+          {filteredProfiles.map((name) => {
             if (editing === name) return null
             const p = config.profiles[name]
             const check = checkResults[name]

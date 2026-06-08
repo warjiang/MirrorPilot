@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Copy, Check } from 'lucide-react'
+import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Copy, Check, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -62,18 +62,28 @@ export function MirrorsPage({ config, setConfig }: Props) {
   const [sortField, setSortField] = useState<SortField | null>(null)
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
-  function copyTarget(fullTarget: string, index: number) {
-    navigator.clipboard.writeText(fullTarget).then(() => {
-      setCopiedIndex(index)
-      setTimeout(() => setCopiedIndex(null), 1500)
-    })
-  }
-
-  const sortedImages = useMemo(() => {
+  const filteredAndSortedImages = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
     const indexed = config.images.map((img, i) => ({ img, i }))
-    if (!sortField) return indexed
-    indexed.sort((a, b) => {
+
+    const filtered = q
+      ? indexed.filter(({ img }) => {
+          const registry = config.profiles[img.profile]?.registry ?? ''
+          const fullTarget = buildFullTarget(registry, img.target)
+          return (
+            img.source.toLowerCase().includes(q) ||
+            fullTarget.toLowerCase().includes(q) ||
+            img.target.toLowerCase().includes(q) ||
+            img.profile.toLowerCase().includes(q) ||
+            (img.notes?.toLowerCase().includes(q) ?? false)
+          )
+        })
+      : indexed
+
+    if (!sortField) return filtered
+    filtered.sort((a, b) => {
       let cmp = 0
       if (sortField === 'enabled') {
         cmp = (a.img.enabled ? 1 : 0) - (b.img.enabled ? 1 : 0)
@@ -84,8 +94,8 @@ export function MirrorsPage({ config, setConfig }: Props) {
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-    return indexed
-  }, [config.images, sortField, sortDir])
+    return filtered
+  }, [config.images, config.profiles, searchQuery, sortField, sortDir])
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -94,6 +104,13 @@ export function MirrorsPage({ config, setConfig }: Props) {
       setSortField(field)
       setSortDir('desc')
     }
+  }
+
+  function copyTarget(fullTarget: string, index: number) {
+    navigator.clipboard.writeText(fullTarget).then(() => {
+      setCopiedIndex(index)
+      setTimeout(() => setCopiedIndex(null), 1500)
+    })
   }
 
   function startCreate() {
@@ -242,78 +259,99 @@ export function MirrorsPage({ config, setConfig }: Props) {
         )}
 
         {config.images.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Source</TableHead>
-                <TableHead>Target</TableHead>
-                <TableHead>Profile</TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('enabled')}>
-                  Enabled <SortIcon field="enabled" />
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('createdAt')}>
-                  Created <SortIcon field="createdAt" />
-                </TableHead>
-                <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('syncedAt')}>
-                  Synced <SortIcon field="syncedAt" />
-                </TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedImages.map(({ img: entry, i: originalIndex }) => {
-                const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
-                return (
-                  <TableRow key={`${entry.source}-${entry.target}-${originalIndex}`} className={!entry.enabled ? 'opacity-50' : ''}>
-                    <TableCell className="font-mono text-xs max-w-[200px] truncate" title={entry.source}>
-                      {entry.source}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground font-mono text-xs max-w-[200px] truncate" title={fullTarget}>
-                      {fullTarget}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{entry.profile}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={entry.enabled ? 'default' : 'secondary'} className="text-xs">
-                        {entry.enabled ? 'enabled' : 'disabled'}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                      {formatTime(entry.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                      {formatTime(entry.syncedAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" title="Copy full target address" onClick={() => copyTarget(fullTarget, originalIndex)}>
-                          {copiedIndex === originalIndex ? <Check className="text-green-600" /> : <Copy />}
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Edit" onClick={() => startEdit(originalIndex)}>
-                          <Pencil />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title={entry.enabled ? 'Disable' : 'Enable'}
-                          onClick={() => toggleEnabled(originalIndex)}
-                        >
-                          {entry.enabled
-                            ? <ToggleRight className="text-primary" />
-                            : <ToggleLeft className="text-muted-foreground" />
-                          }
-                        </Button>
-                        <Button variant="ghost" size="icon" title="Delete" onClick={() => deleteEntry(originalIndex)}>
-                          <Trash2 />
-                        </Button>
-                      </div>
-                    </TableCell>
+          <>
+            <div className="relative">
+              <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+              <Input
+                placeholder="Filter by source, target, profile, notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+
+            {filteredAndSortedImages.length === 0 ? (
+              <p className="text-muted-foreground py-8 text-center text-sm">
+                No entries match "{searchQuery}".
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Target</TableHead>
+                    <TableHead>Profile</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('enabled')}>
+                      Enabled <SortIcon field="enabled" />
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('createdAt')}>
+                      Created <SortIcon field="createdAt" />
+                    </TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('syncedAt')}>
+                      Synced <SortIcon field="syncedAt" />
+                    </TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredAndSortedImages.map(({ img: entry, i: originalIndex }) => {
+                    const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
+                    return (
+                      <TableRow
+                        key={`${entry.source}-${entry.target}-${originalIndex}`}
+                        className={!entry.enabled ? 'opacity-50' : ''}
+                      >
+                        <TableCell className="font-mono text-xs max-w-[200px] truncate" title={entry.source}>
+                          {entry.source}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground font-mono text-xs max-w-[200px] truncate" title={fullTarget}>
+                          {fullTarget}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{entry.profile}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={entry.enabled ? 'default' : 'secondary'} className="text-xs">
+                            {entry.enabled ? 'enabled' : 'disabled'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {formatTime(entry.createdAt)}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                          {formatTime(entry.syncedAt)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" title="Copy full target address" onClick={() => copyTarget(fullTarget, originalIndex)}>
+                              {copiedIndex === originalIndex ? <Check className="text-green-600" /> : <Copy />}
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Edit" onClick={() => startEdit(originalIndex)}>
+                              <Pencil />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={entry.enabled ? 'Disable' : 'Enable'}
+                              onClick={() => toggleEnabled(originalIndex)}
+                            >
+                              {entry.enabled
+                                ? <ToggleRight className="text-primary" />
+                                : <ToggleLeft className="text-muted-foreground" />
+                              }
+                            </Button>
+                            <Button variant="ghost" size="icon" title="Delete" onClick={() => deleteEntry(originalIndex)}>
+                              <Trash2 />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
