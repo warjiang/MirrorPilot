@@ -96,6 +96,7 @@ export REG_B_PASS=yyy
 - `search`: full-screen table TUI (`/` to enter vim-like search mode)
 - `sync`: sync images to target registry (CI only)
 - `validate`: validate config
+- `version`: print the mirrorpilot version (injected at build time by GoReleaser)
 - `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
 - `remote fetch`: fetch remote image list and merge into local config (`--forced` can force local to match remote)
 - `remote check`: verify remote repo read/write readiness
@@ -124,17 +125,37 @@ go run ./cmd/mirrorpilot search
 
 ## CI behavior
 
-- `push` to `main`: validate config and run `mirrorpilot sync`
+- `pull_request` / `push` to `main`: `ci.yml` runs Go checks (`go vet`, `go test`, `go build`) and web checks (`npm run lint`, `npm run typecheck`, `npm run build`)
+- `push` to `main`: `sync-images.yml` validates config and runs `mirrorpilot sync`
 - `mirrorpilot sync` is CI-only; local execution is blocked unless `CI=true`
 - after successful sync, CI commits status updates back to config with `[skip ci]`
 
 ## Release CLI
 
-Tag a version to publish binaries with GoReleaser:
+### Automatic release on changes
+
+`auto-release.yml` publishes a new CLI release automatically whenever source
+code changes (`**/*.go`, `go.mod`, `go.sum`, `.goreleaser.yaml`) land on `main`.
+The next version is derived from the latest `v*` tag and the commit messages
+since that tag (Conventional Commits):
+
+- `BREAKING CHANGE` / `type!:` → major bump
+- `feat:` → minor bump
+- anything else → patch bump
+
+The workflow creates and pushes the new tag, then runs GoReleaser. Add
+`[skip release]` to a commit message to opt out, or trigger it manually from the
+Actions tab (`workflow_dispatch`) with an explicit `patch`/`minor`/`major` bump.
+
+### Manual release by tag
+
+You can still cut a release by pushing a tag explicitly; `release.yml` runs
+GoReleaser for any pushed `v*` tag:
 
 ```bash
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Artifacts are uploaded to GitHub Releases for Linux/macOS/Windows.
+Artifacts are uploaded to GitHub Releases for Linux/macOS/Windows. Check the
+built version with `mirrorpilot version`.
