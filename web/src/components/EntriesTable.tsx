@@ -95,7 +95,7 @@ export function EntriesTable({
             <TableHead>Source</TableHead>
             <TableHead>Target</TableHead>
             <TableHead>Profile</TableHead>
-            <TableHead>Source</TableHead>
+            <TableHead>Source check</TableHead>
             <TableHead>Reachable</TableHead>
             <TableHead>Mirror</TableHead>
             <TableHead>Auth</TableHead>
