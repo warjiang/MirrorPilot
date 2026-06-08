@@ -79,7 +79,7 @@ jobs:
           bump="$BUMP_INPUT"
           if [ "$bump" = "auto" ]; then
             if [ "$latest" = "v0.0.0" ]; then
-              range=""
+              range="HEAD"
             else
               range="${latest}..HEAD"
             fi
