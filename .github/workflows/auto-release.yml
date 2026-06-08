@@ -1,0 +1,139 @@
+name: Auto Release CLI
+
+# Automatically publish a new CLI release whenever source code changes land on
+# main. The next semantic version is derived from the latest tag and the commit
+# messages since that tag (Conventional Commits style):
+#   - BREAKING CHANGE / `type!:`  -> major
+#   - feat:                       -> minor
+#   - anything else               -> patch
+#
+# Manual tag pushes (see release.yml) and `[skip release]` commits are ignored.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.goreleaser.yaml'
+      - '.github/workflows/auto-release.yml'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump (auto/patch/minor/major)'
+        type: choice
+        default: auto
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Compute version and release
+    runs-on: ubuntu-latest
+    # Skip automated status-only commits and explicit release opt-outs.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (!contains(github.event.head_commit.message, '[skip ci]') &&
+       !contains(github.event.head_commit.message, '[skip release]'))
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version
+        id: version
+        env:
+          BUMP_INPUT: ${{ github.event.inputs.bump || 'auto' }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+
+          latest="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
+          if [ -z "$latest" ]; then
+            latest="v0.0.0"
+          fi
+          echo "Latest tag: $latest"
+
+          base="${latest#v}"
+          major="${base%%.*}"
+          rest="${base#*.}"
+          minor="${rest%%.*}"
+          patch="${rest#*.}"
+          # Strip any pre-release/build metadata from patch (e.g. 1.2.3-rc1).
+          patch="${patch%%[-+]*}"
+          major=${major:-0}; minor=${minor:-0}; patch=${patch:-0}
+
+          bump="$BUMP_INPUT"
+          if [ "$bump" = "auto" ]; then
+            if [ "$latest" = "v0.0.0" ]; then
+              range="HEAD"
+            else
+              range="${latest}..HEAD"
+            fi
+            log="$(git log --format='%B' $range)"
+            if echo "$log" | grep -Eq 'BREAKING CHANGE|^[a-zA-Z]+(\(.+\))?!:'; then
+              bump="major"
+            elif echo "$log" | grep -Eq '^feat(\(.+\))?:'; then
+              bump="minor"
+            else
+              bump="patch"
+            fi
+          fi
+          echo "Bump type: $bump"
+
+          case "$bump" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+
+          next="v${major}.${minor}.${patch}"
+          echo "Next version: $next"
+
+          if git rev-parse -q --verify "refs/tags/${next}" >/dev/null; then
+            echo "Tag ${next} already exists; nothing to release."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "version=${next}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.release == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Set up Go
+        if: steps.version.outputs.release == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run GoReleaser
+        if: steps.version.outputs.release == 'true'
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.version }}

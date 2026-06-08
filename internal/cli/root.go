@@ -16,12 +16,23 @@ type options struct {
 	ConfigPath string
 }
 
+// appVersion holds the build version, set via SetVersion from main.
+var appVersion = "dev"
+
+// SetVersion sets the application version reported by the `version` command.
+func SetVersion(v string) {
+	if v != "" {
+		appVersion = v
+	}
+}
+
 func NewRootCmd() *cobra.Command {
 	opts := &options{}
 	cmd := &cobra.Command{
 		Use:           "mirrorpilot",
 		Aliases:       []string{"sync-images"},
 		Short:         "Manage and sync container image mirrors",
+		Version:       appVersion,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -35,8 +46,21 @@ func NewRootCmd() *cobra.Command {
 		newSearchCmd(opts),
 		newSyncCmd(opts),
 		newValidateCmd(opts),
+		newVersionCmd(),
 	)
 	return cmd
+}
+
+func newVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the mirrorpilot version",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Fprintln(cmd.OutOrStdout(), appVersion)
+			return nil
+		},
+	}
 }
 
 func newAddCmd(opts *options) *cobra.Command {
