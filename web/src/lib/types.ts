@@ -23,14 +23,6 @@ export interface MirrorConfig {
   images: ImageEntry[]
 }
 
-export interface GitHubSettings {
-  pat: string
-  owner: string
-  repo: string
-  branch: string
-  configPath: string
-}
-
 export const DEFAULT_PROFILE = 'default'
 
 export function emptyConfig(): MirrorConfig {

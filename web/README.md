@@ -4,13 +4,13 @@ A web version of [MirrorPilot](https://github.com/warjiang/MirrorPilot) for
 managing container image mirror entries and running **source detection** from
 the browser.
 
-It runs entirely on **Cloudflare's free tier**:
+Runs entirely on **Cloudflare's infrastructure**:
 
 - **Cloudflare Pages** serves the static React app.
 - **Cloudflare Pages Functions** (`functions/`) provide the detection and
-  registry-check APIs, running on the Workers runtime (free tier: 100k req/day).
-
-No database or paid add-on is required.
+  registry-check APIs on the Workers runtime.
+- **Cloudflare D1** (managed SQLite) stores mirror configuration per user.
+- **Cloudflare Access** handles SSO — no login screen to build.
 
 ## Architecture
 
@@ -19,9 +19,10 @@ Browser
   ├── React SPA (static, served by Cloudflare Pages)
   │     ├── /mirrors   — mirror entry CRUD + source detection
   │     ├── /profiles  — registry profile CRUD + availability check
-  │     └── /settings  — GitHub storage connection
+  │     └── /settings  — account info
   │
   └── Cloudflare Pages Functions (serverless edge workers)
+        ├── GET/PUT /api/config       — read/write MirrorConfig via D1
         ├── POST /api/detect          — probes source existence, mirror sync status, auth
         └── POST /api/check-registry  — pings registry reachability and validates credentials
 ```
@@ -29,36 +30,32 @@ Browser
 ### Data flow
 
 ```
-Browser localStorage  ←→  in-memory React state  ←→  GitHub repo (mirrorpilot.yaml)
-                                                         via GitHub Contents API
-                                                         (PUT/GET with PAT auth)
+Browser localStorage (cache)
+        ↕  on mount / Pull / Push
+Cloudflare D1  ←  authenticated via Cloudflare Access SSO
+                   (Cf-Access-Authenticated-User-Email header)
 ```
 
-On every page load the app reads from `localStorage`. If GitHub storage is
-configured, clicking **Pull** fetches the latest `mirrorpilot.yaml` from GitHub
-and overwrites in-memory state. **Push** serializes current state back to YAML
-and commits it to the repo.
+On every page load the app seeds from `localStorage` for instant render, then
+immediately fetches the canonical config from D1. **Pull** re-fetches from D1;
+**Push** writes current state back to D1.
 
 ## Secret & credential storage
 
 | Secret | Where stored | Lifetime |
 |---|---|---|
-| GitHub PAT | `localStorage` (browser, this device only) | Until disconnected |
-| Mirror config (profiles, images) | `localStorage` | Until cleared |
+| Mirror config (profiles, images) | Cloudflare D1 (per-user row) | Persistent |
+| Config cache | `localStorage` (this device only) | Until cleared |
 | Registry username / password | Memory only (`useState`) | Browser tab session |
+| Theme preference | `localStorage` | Until cleared |
 
 **Registry credentials** (username/password used for detection) are never
-written to `localStorage`, never committed to GitHub, and never sent to
-Cloudflare — they are only forwarded to the target registry's auth endpoint
-via the `/api/detect` and `/api/check-registry` Pages Functions, and discarded
-immediately after each request.
+written to D1 or `localStorage`. They are forwarded only to the target
+registry's auth endpoint via `/api/detect` and `/api/check-registry`, then
+discarded immediately.
 
-**GitHub PAT** is stored in `localStorage` for convenience. It is sent only
-to `api.github.com` — never to Cloudflare or any other third party. Use a
-fine-grained token with `contents:write` scope limited to the target repository.
-
-**`mirrorpilot.yaml`** stores `username_env` / `password_env` field names (not
-actual credentials), matching the Go CLI convention where credentials are
+**`username_env` / `password_env`** stored in D1 are env-var *names*, not
+actual credentials — matching the Go CLI convention where credentials are
 injected via environment variables at sync time.
 
 ## Tech stack
@@ -67,8 +64,7 @@ injected via environment variables at sync time.
 - [Tailwind CSS v4](https://tailwindcss.com/)
 - [shadcn/ui](https://ui.shadcn.com/) components (new-york style)
 - [React Router v7](https://reactrouter.com/) (browser-history routing)
-- [js-yaml](https://github.com/nodeca/js-yaml) (YAML parse/serialize, Go CLI compatible)
-- Cloudflare Pages Functions + [Wrangler](https://developers.cloudflare.com/workers/wrangler/)
+- Cloudflare Pages Functions + D1 + [Wrangler](https://developers.cloudflare.com/workers/wrangler/)
 
 ## Features
 
@@ -91,49 +87,56 @@ injected via environment variables at sync time.
 | **Mirror** | Mirror image is already synced/present |
 | **Auth** | Supplied credentials are accepted |
 
-### GitHub storage (`/settings`)
-- Connect to a GitHub repository using a Personal Access Token.
-- Config is stored as `mirrorpilot.yaml` (Go CLI compatible format).
-- **Pull**: fetch latest config from GitHub into the browser.
-- **Push**: commit current config back to GitHub.
-- Without GitHub configured, config persists only in `localStorage`.
-
-## mirrorpilot.yaml format
-
-The web app reads and writes the same YAML format as the Go CLI:
-
-```yaml
-version: v1
-profiles:
-  default:
-    registry: registry.cn-shanghai.aliyuncs.com/your-namespace
-    username_env: DEST_REGISTRY_USER    # env var name, not the actual value
-    password_env: DEST_REGISTRY_PASSWORD
-images:
-  - source: nginx:1.27
-    target: nginx:1.27
-    profile: default
-    enabled: true
-    created_at: "2026-06-08T00:00:00Z"
-```
+### Cloud storage (`/settings`)
+Configuration is stored in **Cloudflare D1** and tied to your identity via
+**Cloudflare Access SSO**. No setup required — use the **Pull** and **Push**
+buttons in the header to sync.
 
 ## Local development
 
+### Prerequisites (one-time)
+
 ```bash
+# 1. Create the D1 database (requires wrangler login)
 cd web
-pnpm install
+pnpm wrangler d1 create mirrorpilot
+# → copy the database_id into wrangler.toml
 
-# Front-end only (the /api/* endpoints are NOT available here)
-pnpm run dev
+# 2. Apply the schema to local SQLite
+pnpm wrangler d1 migrations apply mirrorpilot --local
 
-# Full stack with Pages Functions (build first, then serve dist + functions)
-pnpm run build
-pnpm run preview:cf   # wrangler pages dev
+# 3. Create .dev.vars (already gitignored)
+echo 'DEV_USER_EMAIL=dev@localhost' > .dev.vars
 ```
 
-> The `/api/detect` and `/api/check-registry` endpoints are Pages Functions,
-> so use `pnpm run preview:cf` (Wrangler) to exercise them locally. Plain
-> `pnpm run dev` only serves the React app.
+### Daily development (HMR + Pages Functions)
+
+Open **two terminals**:
+
+```bash
+# Terminal 1 — Vite dev server with hot module reload (port 5173)
+cd web
+pnpm dev
+
+# Terminal 2 — wrangler proxies /api/* to D1, everything else to vite
+cd web
+pnpm dev:cf   # wrangler pages dev --proxy 5173
+```
+
+Browse to **`http://localhost:8788`** (wrangler port, not 5173).
+
+| Request | Handler |
+|---|---|
+| `/api/*` | wrangler Pages Function + local D1 |
+| Everything else | proxied to vite (HMR intact) |
+
+### Full production-build preview
+
+```bash
+cd web
+pnpm build
+pnpm preview:cf   # wrangler pages dev serving dist/
+```
 
 ## Checks
 
@@ -143,32 +146,52 @@ pnpm run typecheck   # tsc for app + functions
 pnpm run build       # type-check + production build to dist/
 ```
 
-## Deploy to Cloudflare Pages (free tier)
+## Deploy to Cloudflare Pages
 
-### Option A — Git integration (recommended)
-1. Push this repository to GitHub.
-2. In the Cloudflare dashboard: **Workers & Pages → Create → Pages → Connect to Git**.
-3. Select the repo and set:
-   - **Root directory**: `web`
-   - **Build command**: `pnpm run build`
-   - **Build output directory**: `dist`
-4. Deploy. Functions under `web/functions/` are picked up automatically.
+### Option A — GitHub Actions (recommended)
+
+Push to `main`. The `deploy-pages.yml` workflow runs automatically whenever
+`web/**` changes:
+
+1. Typechecks and builds the SPA.
+2. Applies any pending D1 migrations against the production database.
+3. Deploys to Cloudflare Pages via `wrangler pages deploy`.
+
+**Required GitHub secrets:**
+
+| Secret | Where to get it |
+|---|---|
+| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → My Profile → API Tokens → Create Token (use the *Edit Cloudflare Workers* template, add *D1 Edit* permission) |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → right sidebar |
 
 ### Option B — Wrangler CLI
+
 ```bash
 cd web
-pnpm run deploy   # runs build, then `wrangler pages deploy`
+pnpm run deploy   # pnpm build && wrangler pages deploy
 ```
 
-Configuration lives in [`wrangler.toml`](./wrangler.toml)
-(`pages_build_output_dir = "dist"`).
+### Cloudflare Access setup
+
+After deploying, protect the Pages URL with Cloudflare Access:
+
+1. Zero Trust dashboard → Access → Applications → Add Application → Self-hosted.
+2. Enter the Pages URL (e.g. `mirrorpilot-web.pages.dev`).
+3. Configure your identity provider (GitHub, Google, etc.) and allowed users.
+
+Access automatically injects `Cf-Access-Authenticated-User-Email` into every
+request, which the `/api/config` function uses to scope data per user.
 
 ## Project layout
 
 ```
 web/
+├── migrations/
+│   └── 0001_init.sql       # D1 schema: users, profiles, images
 ├── functions/
 │   └── api/
+│       ├── _env.ts             # Shared Env interface (DB binding)
+│       ├── config.ts           # GET/PUT /api/config  — D1 read/write
 │       ├── detect.ts           # POST /api/detect
 │       ├── check-registry.ts   # POST /api/check-registry
 │       └── _registry.ts        # Docker Registry v2 client (token auth)
@@ -178,21 +201,21 @@ web/
 │   ├── pages/
 │   │   ├── MirrorsPage.tsx     # Mirror CRUD + detection
 │   │   ├── ProfilesPage.tsx    # Profile CRUD + registry check
-│   │   └── SettingsPage.tsx    # GitHub connection settings
+│   │   └── SettingsPage.tsx    # Account info
 │   ├── components/
 │   │   ├── StatusBadge.tsx     # Detection result badges
 │   │   └── ui/                 # shadcn/ui primitives
 │   ├── hooks/
-│   │   ├── useLocalStorage.ts  # Generic JSON-persisted state
-│   │   └── useGitHubStorage.ts # Async GitHub load/save with localStorage fallback
+│   │   ├── useLocalStorage.ts      # Generic JSON-persisted state
+│   │   └── useCloudflareStorage.ts # D1 load/save with localStorage cache
 │   ├── lib/
-│   │   ├── github.ts           # GitHub Contents API client
-│   │   ├── yaml.ts             # MirrorConfig ↔ YAML serialization
-│   │   ├── types.ts            # Shared TypeScript types
-│   │   ├── image.ts            # Image ref parsing/validation
-│   │   └── api.ts              # /api/detect client
-│   ├── router.tsx              # React Router setup
+│   │   ├── cloudflare.ts   # /api/config fetch wrappers
+│   │   ├── types.ts        # Shared TypeScript types
+│   │   ├── image.ts        # Image ref parsing/validation
+│   │   └── api.ts          # /api/detect client
+│   ├── router.tsx          # React Router setup
 │   └── App.tsx
+├── .dev.vars               # Local env (gitignored): DEV_USER_EMAIL=dev@localhost
 ├── wrangler.toml
-└── components.json             # shadcn config
+└── components.json         # shadcn config
 ```

@@ -3,14 +3,13 @@ import { AppLayout } from '@/layouts/AppLayout'
 import { MirrorsPage } from '@/pages/MirrorsPage'
 import { ProfilesPage } from '@/pages/ProfilesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
-import { useGitHubSettings, useGitHubStorage } from '@/hooks/useGitHubStorage'
+import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 import { useState } from 'react'
 import type { Credentials } from '@/components/EntriesTable'
 
 export function AppRouter() {
-  const [ghSettings, setGhSettings] = useGitHubSettings()
   const { config, setConfig, loading, syncing, error, load, save } =
-    useGitHubStorage(ghSettings)
+    useCloudflareStorage()
   const [credentials, setCredentials] = useState<Record<string, Credentials>>({})
 
   return (
@@ -22,7 +21,6 @@ export function AppRouter() {
               loading={loading}
               syncing={syncing}
               error={error}
-              ghConfigured={!!ghSettings}
               onSync={save}
               onLoad={load}
             />
@@ -31,12 +29,7 @@ export function AppRouter() {
           <Route index element={<Navigate to="/mirrors" replace />} />
           <Route
             path="mirrors"
-            element={
-              <MirrorsPage
-                config={config}
-                setConfig={setConfig}
-              />
-            }
+            element={<MirrorsPage config={config} setConfig={setConfig} />}
           />
           <Route
             path="profiles"
@@ -49,15 +42,7 @@ export function AppRouter() {
               />
             }
           />
-          <Route
-            path="settings"
-            element={
-              <SettingsPage
-                settings={ghSettings}
-                onSave={setGhSettings}
-              />
-            }
-          />
+          <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

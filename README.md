@@ -126,6 +126,7 @@ go run ./cmd/mirrorpilot search
 ## CI behavior
 
 - `pull_request` / `push` to `main`: `ci.yml` runs Go checks (`go vet`, `go test`, `go build`) and web checks (`pnpm run lint`, `pnpm run typecheck`, `pnpm run build`)
+- `push` to `main` on `web/**`: `deploy-pages.yml` typechecks, builds, applies D1 migrations, and deploys to Cloudflare Pages (requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets)
 - `push` to `main`: `sync-images.yml` validates config and runs `mirrorpilot sync`
 - `mirrorpilot sync` is CI-only; local execution is blocked unless `CI=true`
 - after successful sync, CI commits status updates back to config with `[skip ci]`

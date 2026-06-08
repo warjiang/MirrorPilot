@@ -8,7 +8,6 @@ interface Props {
   loading: boolean
   syncing: boolean
   error: string | null
-  ghConfigured: boolean
   onSync: () => void
   onLoad: () => void
 }
@@ -19,7 +18,7 @@ const navItems = [
   { to: '/settings', label: 'Settings' },
 ]
 
-export function AppLayout({ loading, syncing, error, ghConfigured, onSync, onLoad }: Props) {
+export function AppLayout({ loading, syncing, error, onSync, onLoad }: Props) {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('mirrorpilot.theme') === 'dark' ||
@@ -60,8 +59,7 @@ export function AppLayout({ loading, syncing, error, ghConfigured, onSync, onLoa
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            {ghConfigured && (
-              <>
+            <>
                 <Button
                   variant="outline"
                   size="sm"
@@ -81,7 +79,6 @@ export function AppLayout({ loading, syncing, error, ghConfigured, onSync, onLoa
                   Push
                 </Button>
               </>
-            )}
             <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
               {dark ? <Sun /> : <Moon />}
             </Button>
