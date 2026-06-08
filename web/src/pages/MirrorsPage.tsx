@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Copy, Check, Search } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import {
   Select,
   SelectContent,
@@ -22,6 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { toast } from '@/components/Toaster'
 import { buildFullTarget, deriveTarget, validateImageReference } from '@/lib/image'
 import type { ImageEntry, MirrorConfig } from '@/lib/types'
 
@@ -41,11 +42,18 @@ interface FormState {
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 
+function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
+  if (!active) return null
+  return dir === 'asc'
+    ? <ArrowUp className="inline size-3" />
+    : <ArrowDown className="inline size-3" />
+}
+
 function formatTime(iso?: string) {
-  if (!iso) return '—'
+  if (!iso) return null
   const d = new Date(iso)
   return d.toLocaleString(undefined, {
-    year: 'numeric', month: '2-digit', day: '2-digit',
+    month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
   })
 }
@@ -63,6 +71,23 @@ export function MirrorsPage({ config, setConfig }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape' && formOpen) {
+        cancelForm()
+        return
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n' && !formOpen) {
+        e.preventDefault()
+        startCreate()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formOpen])
 
   const filteredAndSortedImages = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
@@ -84,7 +109,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
 
     if (!sortField) return filtered
     filtered.sort((a, b) => {
-      let cmp = 0
+      let cmp: number
       if (sortField === 'enabled') {
         cmp = (a.img.enabled ? 1 : 0) - (b.img.enabled ? 1 : 0)
       } else {
@@ -151,6 +176,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
             : img
         ),
       }))
+      toast('Mirror entry updated')
     } else {
       const entry: ImageEntry = {
         source: form.source.trim(),
@@ -161,12 +187,21 @@ export function MirrorsPage({ config, setConfig }: Props) {
         notes: form.notes.trim() || undefined,
       }
       setConfig((c) => ({ ...c, images: [...c.images, entry] }))
+      toast(`Added ${form.source.trim()}`)
     }
     cancelForm()
   }
 
   function deleteEntry(index: number) {
-    setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== index) }))
+    setDeleteTarget(index)
+  }
+
+  function confirmDelete() {
+    if (deleteTarget === null) return
+    const entry = config.images[deleteTarget]
+    setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== deleteTarget) }))
+    toast(`Removed ${entry.source}`)
+    setDeleteTarget(null)
   }
 
   function toggleEnabled(index: number) {
@@ -179,13 +214,6 @@ export function MirrorsPage({ config, setConfig }: Props) {
   const effectiveTarget = form.targetTouched && form.target.trim()
     ? form.target
     : form.source.trim() ? deriveTarget(form.source) : ''
-
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return null
-    return sortDir === 'asc'
-      ? <ArrowUp className="inline size-3" />
-      : <ArrowDown className="inline size-3" />
-  }
 
   return (
     <Card>
@@ -204,70 +232,73 @@ export function MirrorsPage({ config, setConfig }: Props) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {formOpen && (
-          <>
-            <div className="rounded-lg border border-dashed p-4 space-y-3">
-              <p className="text-sm font-medium">{editIndex !== null ? 'Edit Mirror' : 'New Mirror'}</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Source image</Label>
-                  <Input
-                    placeholder="nginx:1.27"
-                    value={form.source}
-                    onChange={(e) => { setForm((f) => ({ ...f, source: e.target.value })); setFormError(null) }}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Target path</Label>
-                  <Input
-                    placeholder={form.source ? deriveTarget(form.source) : 'auto-derived'}
-                    value={form.targetTouched ? form.target : effectiveTarget}
-                    onChange={(e) => setForm((f) => ({ ...f, target: e.target.value, targetTouched: true }))}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Profile</Label>
-                  <Select value={form.profile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {profileNames.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Notes</Label>
-                  <Input
-                    placeholder="optional note"
-                    value={form.notes}
-                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  />
-                </div>
+          <div className="rounded-lg border border-dashed p-4 space-y-3">
+            <p className="text-sm font-medium">{editIndex !== null ? 'Edit Mirror' : 'New Mirror'}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1.5">
+                <Label>Source image</Label>
+                <Input
+                  autoFocus
+                  placeholder="nginx:1.27"
+                  value={form.source}
+                  onChange={(e) => { setForm((f) => ({ ...f, source: e.target.value })); setFormError(null) }}
+                />
               </div>
-              {formError && <p className="text-destructive text-sm">{formError}</p>}
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleSave}>{editIndex !== null ? 'Save' : 'Add'}</Button>
-                <Button size="sm" variant="outline" onClick={cancelForm}>Cancel</Button>
+              <div className="flex flex-col gap-1.5">
+                <Label>Target path</Label>
+                <Input
+                  placeholder={form.source ? deriveTarget(form.source) : 'auto-derived'}
+                  value={form.targetTouched ? form.target : effectiveTarget}
+                  onChange={(e) => setForm((f) => ({ ...f, target: e.target.value, targetTouched: true }))}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Profile</Label>
+                <Select value={form.profile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {profileNames.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Notes</Label>
+                <Input
+                  placeholder="optional note"
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                />
               </div>
             </div>
-            <Separator />
-          </>
+            {formError && <p className="text-destructive text-sm">{formError}</p>}
+            <div className="flex gap-2">
+              <Button size="sm" onClick={handleSave}>{editIndex !== null ? 'Save' : 'Add'}</Button>
+              <Button size="sm" variant="outline" onClick={cancelForm}>Cancel</Button>
+            </div>
+          </div>
         )}
 
         {config.images.length === 0 && !formOpen && (
           <p className="text-muted-foreground py-8 text-center text-sm">
-            No mirror entries yet. Add one to get started.
+            No mirror entries yet. Click "Add Mirror" to get started.
           </p>
         )}
 
         {config.images.length > 0 && (
           <>
-            <div className="relative">
-              <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
-              <Input
-                placeholder="Filter by source, target, profile, notes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-              />
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1">
+                <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
+                <Input
+                  placeholder="Filter by source, target, profile, notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                {filteredAndSortedImages.length}/{config.images.length}
+              </span>
             </div>
 
             {filteredAndSortedImages.length === 0 ? (
@@ -275,85 +306,109 @@ export function MirrorsPage({ config, setConfig }: Props) {
                 No entries match "{searchQuery}".
               </p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Target</TableHead>
-                    <TableHead>Profile</TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('enabled')}>
-                      Enabled <SortIcon field="enabled" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('createdAt')}>
-                      Created <SortIcon field="createdAt" />
-                    </TableHead>
-                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort('syncedAt')}>
-                      Synced <SortIcon field="syncedAt" />
-                    </TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAndSortedImages.map(({ img: entry, i: originalIndex }) => {
-                    const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
-                    return (
-                      <TableRow
-                        key={`${entry.source}-${entry.target}-${originalIndex}`}
-                        className={!entry.enabled ? 'opacity-50' : ''}
+              <div className="overflow-x-auto -mx-6 px-6">
+                <Table className="table-fixed w-full min-w-[640px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead
+                        className="w-[68px] cursor-pointer select-none"
+                        onClick={() => toggleSort('enabled')}
                       >
-                        <TableCell className="font-mono text-xs max-w-[200px] truncate" title={entry.source}>
-                          {entry.source}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-xs max-w-[200px] truncate" title={fullTarget}>
-                          {fullTarget}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{entry.profile}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={entry.enabled ? 'default' : 'secondary'} className="text-xs">
-                            {entry.enabled ? 'enabled' : 'disabled'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                          {formatTime(entry.createdAt)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                          {formatTime(entry.syncedAt)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" title="Copy full target address" onClick={() => copyTarget(fullTarget, originalIndex)}>
-                              {copiedIndex === originalIndex ? <Check className="text-green-600" /> : <Copy />}
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Edit" onClick={() => startEdit(originalIndex)}>
-                              <Pencil />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title={entry.enabled ? 'Disable' : 'Enable'}
-                              onClick={() => toggleEnabled(originalIndex)}
-                            >
-                              {entry.enabled
-                                ? <ToggleRight className="text-primary" />
-                                : <ToggleLeft className="text-muted-foreground" />
-                              }
-                            </Button>
-                            <Button variant="ghost" size="icon" title="Delete" onClick={() => deleteEntry(originalIndex)}>
-                              <Trash2 />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+                        Status <SortIndicator active={sortField === 'enabled'} dir={sortDir} />
+                      </TableHead>
+                      <TableHead className="w-[32%]">Source</TableHead>
+                      <TableHead className="w-[32%]">Target</TableHead>
+                      <TableHead className="w-[72px]">Profile</TableHead>
+                      <TableHead
+                        className="w-[96px] cursor-pointer select-none"
+                        onClick={() => toggleSort('syncedAt')}
+                      >
+                        Synced <SortIndicator active={sortField === 'syncedAt'} dir={sortDir} />
+                      </TableHead>
+                      <TableHead className="w-[140px] text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAndSortedImages.map(({ img: entry, i: originalIndex }) => {
+                      const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
+                      return (
+                        <TableRow
+                          key={`${entry.source}-${originalIndex}`}
+                          className={!entry.enabled ? 'opacity-50' : ''}
+                        >
+                          <TableCell className="py-2">
+                            {entry.synced ? (
+                              <Badge variant="success" className="text-[10px] px-1.5 py-0">synced</Badge>
+                            ) : entry.enabled ? (
+                              <Badge variant="warning" className="text-[10px] px-1.5 py-0">pending</Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">off</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate font-mono text-xs" title={entry.source}>
+                              {entry.source}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate font-mono text-xs text-muted-foreground" title={fullTarget}>
+                              {fullTarget}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate text-xs text-muted-foreground" title={entry.profile}>
+                              {entry.profile}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 text-muted-foreground text-xs whitespace-nowrap">
+                            <span className="inline-block pr-2">{formatTime(entry.syncedAt) ?? '—'}</span>
+                          </TableCell>
+                          <TableCell className="py-2 text-right">
+                            <div className="flex justify-end gap-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                aria-label="Copy target address"
+                                onClick={() => copyTarget(fullTarget, originalIndex)}
+                              >
+                                {copiedIndex === originalIndex
+                                  ? <Check className="size-3.5 text-green-600" />
+                                  : <Copy className="size-3.5" />}
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-7" onClick={() => startEdit(originalIndex)}>
+                                <Pencil className="size-3.5" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-7" onClick={() => toggleEnabled(originalIndex)}>
+                                {entry.enabled
+                                  ? <ToggleRight className="size-3.5 text-primary" />
+                                  : <ToggleLeft className="size-3.5 text-muted-foreground" />}
+                              </Button>
+                              <Button variant="ghost" size="icon" className="size-7" onClick={() => deleteEntry(originalIndex)}>
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </>
         )}
       </CardContent>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Delete mirror entry"
+        description={deleteTarget !== null ? `Remove "${config.images[deleteTarget]?.source}" from configuration?` : ''}
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </Card>
   )
 }

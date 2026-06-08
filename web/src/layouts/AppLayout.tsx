@@ -1,7 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Container, ExternalLink, Loader2, Upload, Download } from 'lucide-react'
+import { Container, ExternalLink, Loader2, Upload, Download, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useEffect, useState } from 'react'
 
 interface Props {
   loading: boolean
@@ -19,6 +20,17 @@ const navItems = [
 ]
 
 export function AppLayout({ loading, syncing, error, ghConfigured, onSync, onLoad }: Props) {
+  const [dark, setDark] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('mirrorpilot.theme') === 'dark' ||
+      (!localStorage.getItem('mirrorpilot.theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  })
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+    localStorage.setItem('mirrorpilot.theme', dark ? 'dark' : 'light')
+  }, [dark])
+
   return (
     <div className="bg-background min-h-screen">
       <header className="border-b">
@@ -70,6 +82,9 @@ export function AppLayout({ loading, syncing, error, ghConfigured, onSync, onLoa
                 </Button>
               </>
             )}
+            <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
+              {dark ? <Sun /> : <Moon />}
+            </Button>
             <Button variant="ghost" size="icon" asChild>
               <a
                 href="https://github.com/warjiang/MirrorPilot"

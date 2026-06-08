@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { toast } from '@/components/Toaster'
 import { testConnection } from '@/lib/github'
 import type { GitHubSettings } from '@/lib/types'
 
@@ -19,6 +21,7 @@ export function SettingsPage({ settings, onSave }: Props) {
   )
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null)
+  const [showDisconnect, setShowDisconnect] = useState(false)
 
   function handleOwnerRepo(value: string) {
     const parts = value.split('/')
@@ -40,12 +43,15 @@ export function SettingsPage({ settings, onSave }: Props) {
   function handleSave() {
     if (!form.pat.trim() || !form.owner.trim() || !form.repo.trim()) return
     onSave(form)
+    toast('Settings saved')
   }
 
   function handleDisconnect() {
     onSave(null)
     setForm({ pat: '', owner: '', repo: '', branch: 'main', configPath: 'mirrorpilot.yaml' })
     setTestResult(null)
+    setShowDisconnect(false)
+    toast('Disconnected from GitHub')
   }
 
   return (
@@ -103,7 +109,7 @@ export function SettingsPage({ settings, onSave }: Props) {
         </div>
 
         {testResult && (
-          <div className={`flex items-center gap-2 text-sm ${testResult.ok ? 'text-green-600' : 'text-destructive'}`}>
+          <div className={`flex items-center gap-2 text-sm ${testResult.ok ? 'text-success' : 'text-destructive'}`}>
             {testResult.ok ? <CheckCircle className="size-4" /> : <XCircle className="size-4" />}
             {testResult.message}
           </div>
@@ -118,7 +124,7 @@ export function SettingsPage({ settings, onSave }: Props) {
             Save Settings
           </Button>
           {settings && (
-            <Button variant="destructive" onClick={handleDisconnect}>
+            <Button variant="destructive" onClick={() => setShowDisconnect(true)}>
               Disconnect
             </Button>
           )}
@@ -129,6 +135,16 @@ export function SettingsPage({ settings, onSave }: Props) {
           other than api.github.com.
         </p>
       </CardContent>
+
+      <ConfirmDialog
+        open={showDisconnect}
+        title="Disconnect GitHub"
+        description="This will remove your PAT and repository settings from this browser. Your remote configuration will not be affected."
+        confirmLabel="Disconnect"
+        variant="destructive"
+        onConfirm={handleDisconnect}
+        onCancel={() => setShowDisconnect(false)}
+      />
     </Card>
   )
 }

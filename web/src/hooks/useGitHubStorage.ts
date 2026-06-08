@@ -3,6 +3,7 @@ import { fetchFile, saveFile } from '@/lib/github'
 import { parseYaml, serializeYaml } from '@/lib/yaml'
 import type { GitHubSettings, MirrorConfig } from '@/lib/types'
 import { emptyConfig } from '@/lib/types'
+import { toast } from '@/components/Toaster'
 
 const SETTINGS_KEY = 'mirrorpilot.github.settings'
 const CONFIG_KEY = 'mirrorpilot.config.v1'
@@ -60,8 +61,11 @@ export function useGitHubStorage(settings: GitHubSettings | null) {
         const parsed = parseYaml(content)
         setConfigState(parsed)
       }
+      toast('Pulled latest config from GitHub')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+      toast(msg, 'error')
     } finally {
       setLoading(false)
     }
@@ -75,8 +79,11 @@ export function useGitHubStorage(settings: GitHubSettings | null) {
       const yamlContent = serializeYaml(config)
       const newSha = await saveFile(settings, yamlContent, shaRef.current)
       shaRef.current = newSha
+      toast('Pushed config to GitHub')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const msg = e instanceof Error ? e.message : String(e)
+      setError(msg)
+      toast(msg, 'error')
     } finally {
       setSyncing(false)
     }
