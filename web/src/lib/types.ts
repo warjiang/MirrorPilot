@@ -23,6 +23,14 @@ export interface MirrorConfig {
   images: ImageEntry[]
 }
 
+export interface GitHubSettings {
+  pat: string
+  owner: string
+  repo: string
+  branch: string
+  configPath: string
+}
+
 export const DEFAULT_PROFILE = 'default'
 
 export function emptyConfig(): MirrorConfig {
@@ -30,9 +38,9 @@ export function emptyConfig(): MirrorConfig {
     version: 'v1',
     profiles: {
       [DEFAULT_PROFILE]: {
-        registry: 'registry.example.com/namespace',
-        usernameEnv: 'DEST_REGISTRY_USER',
-        passwordEnv: 'DEST_REGISTRY_PASSWORD',
+        registry: '',
+        usernameEnv: '',
+        passwordEnv: '',
       },
     },
     images: [],
@@ -68,4 +76,15 @@ export interface DetectRequest {
   target: string
   username?: string
   password?: string
+}
+
+export interface CheckRegistryRequest {
+  registry: string
+  username?: string
+  password?: string
+}
+
+export interface CheckRegistryResponse {
+  reachable: { ok: boolean; message: string }
+  auth: { ok: boolean; message: string }
 }

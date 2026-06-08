@@ -125,7 +125,7 @@ go run ./cmd/mirrorpilot search
 
 ## CI behavior
 
-- `pull_request` / `push` to `main`: `ci.yml` runs Go checks (`go vet`, `go test`, `go build`) and web checks (`npm run lint`, `npm run typecheck`, `npm run build`)
+- `pull_request` / `push` to `main`: `ci.yml` runs Go checks (`go vet`, `go test`, `go build`) and web checks (`pnpm run lint`, `pnpm run typecheck`, `pnpm run build`)
 - `push` to `main`: `sync-images.yml` validates config and runs `mirrorpilot sync`
 - `mirrorpilot sync` is CI-only; local execution is blocked unless `CI=true`
 - after successful sync, CI commits status updates back to config with `[skip ci]`
