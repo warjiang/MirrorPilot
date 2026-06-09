@@ -100,24 +100,27 @@ Or via Cloudflare Dashboard:
 1. Go to **Pages** → your project → **Settings** → **Environment variables**
 2. Add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` for both Production and Preview
 
-#### 3. Configure GitHub Actions secrets (for web-triggered sync)
+#### 3. Configure Registry Credentials (for web-triggered sync)
 
-If you want the "Sync" button in the Web UI to trigger GitHub Actions:
+If you want the "Sync" button in the Web UI to trigger GitHub Actions, you need to configure destination registry credentials in the Web UI:
 
-| Secret | Description |
-|--------|-------------|
-| `WEB_API_BASE_URL` | Your production URL (set to `https://mirrotpilot.20220625.xyz`) |
-| `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
-| `DEST_REGISTRY_USER` | Destination registry username |
-| `DEST_REGISTRY_PASSWORD` | Destination registry password |
+1. Go to **Settings** in the Web UI
+2. In the **Registry Credentials** section, click **Add Registry Credential**
+3. Enter:
+   - **Registry URL**: your destination registry (e.g., `registry.example.com`)
+   - **Username**: registry username
+   - **Password**: registry password
+4. Click **Save Credential**
 
-Also add to Cloudflare Pages environment variables:
+These credentials are stored securely in Cloudflare D1 and used by GitHub Actions sync.
+
+Also ensure these environment variables are set in Cloudflare Pages:
 
 | Variable | Description |
 |----------|-------------|
 | `GITHUB_TOKEN` | A GitHub PAT with `repo` scope (for triggering `repository_dispatch`) |
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
-| `SYNC_SECRET` | Same shared secret as configured in GitHub Actions |
+| `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
 | `ADMIN_EMAIL` | (Optional) GitHub email address of the user who should have admin privileges |
 
 > Note: `GITHUB_REPO` is the GitHub repository identifier (for example `warjiang/MirrorPilot`), not the Cloudflare Pages project name.  
@@ -200,6 +203,16 @@ injected via environment variables at sync time.
 ### Cloud storage (`/settings`)
 Configuration is stored in **Cloudflare D1** and tied to your GitHub identity.
 No setup required — use the **Pull** and **Push** buttons in the header to sync.
+
+### Registry credentials management
+Registry credentials for the sync operation are stored securely in **Cloudflare D1**:
+
+1. Go to the **Settings** page
+2. In **Registry Credentials**, add destination registry credentials
+3. These are automatically used by GitHub Actions sync via `/api/secrets/ci`
+
+Credentials are never exposed in logs or configuration files — they're fetched
+directly by the sync Action via a secure API endpoint with `SYNC_SECRET` authentication.
 
 ## Local development
 
@@ -315,7 +328,8 @@ web/
 │   ├── 0001_init.sql           # D1 schema: users, profiles, images
 │   ├── 0002_sessions.sql       # Sessions table + user OAuth fields
 │   ├── 0003_sync_status.sql    # Sync status columns on images
-│   └── 0004_admin.sql          # Admin role support
+│   ├── 0004_admin.sql          # Admin role support
+│   └── 0005_registry_secrets.sql # Registry credentials storage
 ├── functions/
 │   ├── _env.ts                 # Shared Env interface (DB + secrets)
 │   ├── _middleware.ts          # Auth middleware (session validation)
@@ -329,6 +343,9 @@ web/
 │       │   ├── callback.ts     # OAuth callback + session creation
 │       │   ├── me.ts           # Current user info
 │       │   └── logout.ts       # Session destruction
+│       ├── secrets/
+│       │   ├── registry.ts     # GET/POST/DELETE registry credentials (UI)
+│       │   └── ci.ts           # GET registry credentials (for CI/CD)
 │       └── sync/
 │           ├── trigger.ts      # Trigger GitHub Actions sync
 │           ├── pending.ts      # Return pending images (for Actions)
@@ -340,9 +357,10 @@ web/
 │   │   ├── LandingPage.tsx     # Public landing page
 │   │   ├── MirrorsPage.tsx     # Mirror CRUD + detection + sync
 │   │   ├── ProfilesPage.tsx    # Profile CRUD + registry check
-│   │   └── SettingsPage.tsx    # Account info
+│   │   └── SettingsPage.tsx    # Account info + registry credentials
 │   ├── components/
 │   │   ├── AuthGuard.tsx       # Route protection (redirects to landing)
+│   │   ├── RegistrySecretsPanel.tsx # Registry credentials UI
 │   │   ├── StatusBadge.tsx     # Detection result badges
 │   │   └── ui/                 # shadcn/ui primitives
 │   ├── hooks/
