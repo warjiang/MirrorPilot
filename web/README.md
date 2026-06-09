@@ -216,51 +216,40 @@ directly by the sync Action via a secure API endpoint with `SYNC_SECRET` authent
 
 ## Local development
 
-### Prerequisites (one-time)
+For a detailed local development guide with troubleshooting, see [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md).
+
+### Quick start
 
 ```bash
-# 1. Create the D1 database (requires wrangler login)
 cd web
-pnpm wrangler d1 create mirrorpilot
-# → copy the database_id into wrangler.toml
 
-# 2. Apply the schema to local SQLite
+# 1. Initialize D1 database
+pnpm wrangler d1 create mirrorpilot --local
 pnpm wrangler d1 migrations apply mirrorpilot --local
 
-# 3. Create .dev.vars (already gitignored)
+# 2. Create GitHub OAuth App at https://github.com/settings/developers
+# Set Authorization callback URL to: http://localhost:8788/api/auth/callback
+
+# 3. Configure .dev.vars with OAuth credentials
 cat > .dev.vars << 'EOF'
 DEV_USER_EMAIL=dev@localhost
 GITHUB_CLIENT_ID=your-client-id
 GITHUB_CLIENT_SECRET=your-client-secret
 GITHUB_TOKEN=your-github-pat
-GITHUB_REPO=warjiang/MirrorPilot
-SYNC_SECRET=your-random-secret
+GITHUB_REPO=your-repo
+SYNC_SECRET=your-sync-secret
 ADMIN_EMAIL=dev@localhost
 EOF
-```
 
-> With `DEV_USER_EMAIL` set, authentication is bypassed in local development.
-
-### Daily development (HMR + Pages Functions)
-
-Open **two terminals**:
-
-```bash
-# Terminal 1 — Vite dev server with hot module reload (port 5173)
-cd web
+# 4. Start development servers in two terminals
+# Terminal 1:
 pnpm dev
 
-# Terminal 2 — wrangler proxies /api/* to D1, everything else to vite
-cd web
-pnpm dev:cf   # wrangler pages dev --proxy 5173
+# Terminal 2:
+pnpm dev:cf
 ```
 
-Browse to **`http://localhost:8788`** (wrangler port, not 5173).
-
-| Request | Handler |
-|---|---|
-| `/api/*` | wrangler Pages Function + local D1 |
-| Everything else | proxied to vite (HMR intact) |
+Visit **http://localhost:8788** (not 5173 — that's just the Vite server)
 
 ### Full production-build preview
 
