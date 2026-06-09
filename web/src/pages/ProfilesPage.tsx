@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Plus, Pencil, Trash2, Wifi, Search, ChevronDown, ChevronRight } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -6,29 +6,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { RegistrySecretsPanel } from '@/components/RegistrySecretsPanel'
 import { toast } from '@/components/Toaster'
-import type { Credentials } from '@/components/EntriesTable'
 import type { MirrorConfig, RegistryProfile, CheckRegistryResponse } from '@/lib/types'
 
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
-  credentials: Record<string, Credentials>
-  setCredentials: (updater: Record<string, Credentials> | ((prev: Record<string, Credentials>) => Record<string, Credentials>)) => void
 }
 
 interface FormState {
   name: string
   registry: string
-  usernameEnv: string
-  passwordEnv: string
+  credentialRegistry: string
 }
 
-const emptyForm: FormState = { name: '', registry: '', usernameEnv: '', passwordEnv: '' }
+const emptyForm: FormState = { name: '', registry: '', credentialRegistry: '' }
 
-export function ProfilesPage({ config, setConfig, credentials, setCredentials }: Props) {
+export function ProfilesPage({ config, setConfig }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -37,8 +40,26 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
   const [searchQuery, setSearchQuery] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [savedCredentials, setSavedCredentials] = useState<Array<{ registry: string; destUser: string; destPass: string }>>([])
 
   const profileNames = Object.keys(config.profiles)
+
+  // Load saved credentials from API on mount
+  useEffect(() => {
+    fetchSavedCredentials()
+  }, [])
+
+  async function fetchSavedCredentials() {
+    try {
+      const res = await fetch('/api/secrets/registry')
+      if (res.ok) {
+        const data = await res.json() as { secrets: Array<{ registry: string; destUser: string; destPass: string }> }
+        setSavedCredentials(data.secrets || [])
+      }
+    } catch (e) {
+      console.error('Failed to load saved credentials:', e)
+    }
+  }
 
   const filteredProfiles = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
@@ -48,8 +69,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
       return (
         name.toLowerCase().includes(q) ||
         p.registry.toLowerCase().includes(q) ||
-        (p.usernameEnv?.toLowerCase().includes(q) ?? false) ||
-        (p.passwordEnv?.toLowerCase().includes(q) ?? false)
+        (p.credentialRegistry?.toLowerCase().includes(q) ?? false)
       )
     })
   }, [profileNames, config.profiles, searchQuery])
@@ -74,7 +94,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
     const p = config.profiles[name]
     setEditing(name)
     setCreating(false)
-    setForm({ name, registry: p.registry, usernameEnv: p.usernameEnv ?? '', passwordEnv: p.passwordEnv ?? '' })
+    setForm({ name, registry: p.registry, credentialRegistry: p.credentialRegistry ?? '' })
     setError(null)
   }
 
@@ -93,8 +113,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
 
     const profile: RegistryProfile = {
       registry: form.registry.trim(),
-      usernameEnv: form.usernameEnv.trim() || undefined,
-      passwordEnv: form.passwordEnv.trim() || undefined,
+      credentialRegistry: form.credentialRegistry.trim() || undefined,
     }
 
     setConfig((c) => {
@@ -124,27 +143,23 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
       const images = c.images.filter((img) => img.profile !== deleteTarget)
       return { ...c, profiles, images }
     })
-    setCredentials((cr) => {
-      const next = { ...cr }
-      delete next[deleteTarget]
-      return next
-    })
     toast(`Deleted profile "${deleteTarget}"${imageCount ? ` and ${imageCount} linked image${imageCount > 1 ? 's' : ''}` : ''}`)
     setDeleteTarget(null)
   }
 
   async function checkRegistry(name: string) {
     const profile = config.profiles[name]
-    const creds = credentials[name]
     setCheckResults((r) => ({ ...r, [name]: { loading: true } }))
     try {
+      // Find saved credentials for this registry
+      const savedCred = savedCredentials.find((c) => c.registry === profile.credentialRegistry)
       const res = await fetch('/api/check-registry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           registry: profile.registry,
-          username: creds?.username,
-          password: creds?.password,
+          username: savedCred?.destUser,
+          password: savedCred?.destPass,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -180,6 +195,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
               isCreate={creating}
               onSave={handleSave}
               onCancel={cancelForm}
+              savedCredentials={savedCredentials}
             />
           )}
 
@@ -217,7 +233,6 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             if (editing === name) return null
             const p = config.profiles[name]
             const check = checkResults[name]
-            const creds = credentials[name] ?? { username: '', password: '' }
             const isExpanded = expanded.has(name)
             const imageCount = config.images.filter((img) => img.profile === name).length
             return (
@@ -253,44 +268,28 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
                 </div>
                 {isExpanded && (
                   <div className="border-t px-4 py-3 space-y-3 bg-muted/30">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs">Username (for detection only)</Label>
-                        <Input
-                          placeholder="registry username"
-                          value={creds.username}
-                          autoComplete="off"
-                          onChange={(e) => setCredentials((cr) => ({ ...cr, [name]: { ...creds, username: e.target.value } }))}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs">Password (for detection only)</Label>
-                        <Input
-                          type="password"
-                          placeholder="registry password"
-                          value={creds.password}
-                          autoComplete="off"
-                          onChange={(e) => setCredentials((cr) => ({ ...cr, [name]: { ...creds, password: e.target.value } }))}
-                        />
-                      </div>
-                    </div>
-                    {p.usernameEnv && (
-                      <p className="text-muted-foreground text-xs">
-                        CI credentials: <code className="bg-muted px-1 rounded">{p.usernameEnv}</code> / <code className="bg-muted px-1 rounded">{p.passwordEnv}</code>
-                      </p>
+                    {p.credentialRegistry ? (
+                     <div className="flex flex-col gap-1">
+                       <Label className="text-xs">Using Credential</Label>
+                       <div className="p-2 bg-white rounded border text-sm font-mono">
+                         {p.credentialRegistry}
+                       </div>
+                     </div>
+                    ) : (
+                     <p className="text-muted-foreground text-xs italic">No credential selected</p>
                     )}
                     {check?.result && (
-                      <div className="flex gap-3 text-xs">
-                        <span className={check.result.reachable.ok ? 'text-success' : 'text-destructive'}>
-                          Reachable: {check.result.reachable.message}
-                        </span>
-                        <span className={check.result.auth.ok ? 'text-success' : 'text-destructive'}>
-                          Auth: {check.result.auth.message}
-                        </span>
-                      </div>
+                     <div className="flex gap-3 text-xs">
+                       <span className={check.result.reachable.ok ? 'text-success' : 'text-destructive'}>
+                         Reachable: {check.result.reachable.message}
+                       </span>
+                       <span className={check.result.auth.ok ? 'text-success' : 'text-destructive'}>
+                         Auth: {check.result.auth.message}
+                       </span>
+                     </div>
                     )}
                     {check?.error && (
-                      <p className="text-destructive text-xs">{check.error}</p>
+                     <p className="text-destructive text-xs">{check.error}</p>
                     )}
                   </div>
                 )}
@@ -316,7 +315,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
 }
 
 function ProfileFormInline({
-  form, setForm, error, isCreate, onSave, onCancel,
+  form, setForm, error, isCreate, onSave, onCancel, savedCredentials = [],
 }: {
   form: FormState
   setForm: (f: FormState) => void
@@ -324,6 +323,7 @@ function ProfileFormInline({
   isCreate: boolean
   onSave: () => void
   onCancel: () => void
+  savedCredentials?: Array<{ registry: string; destUser: string; destPass: string }>
 }) {
   return (
     <div className="rounded-lg border border-dashed p-4 space-y-3">
@@ -346,21 +346,21 @@ function ProfileFormInline({
             placeholder="registry.cn-shanghai.aliyuncs.com/namespace"
           />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Username env var</Label>
-          <Input
-            value={form.usernameEnv}
-            onChange={(e) => setForm({ ...form, usernameEnv: e.target.value })}
-            placeholder="DEST_REGISTRY_USER"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Password env var</Label>
-          <Input
-            value={form.passwordEnv}
-            onChange={(e) => setForm({ ...form, passwordEnv: e.target.value })}
-            placeholder="DEST_REGISTRY_PASSWORD"
-          />
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label>Credentials</Label>
+          <Select value={form.credentialRegistry} onValueChange={(value) => setForm({ ...form, credentialRegistry: value })}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select saved credentials..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">None</SelectItem>
+              {savedCredentials.map((cred) => (
+                <SelectItem key={cred.registry} value={cred.registry}>
+                  {cred.registry} ({cred.destUser})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
       {error && <p className="text-destructive text-sm">{error}</p>}

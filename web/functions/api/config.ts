@@ -40,8 +40,7 @@ async function getOrCreateUser(db: D1Database, email: string): Promise<number> {
 interface ProfileRow {
   name: string
   registry: string
-  username_env: string
-  password_env: string
+  credential_registry: string
 }
 
 interface ImageRow {
@@ -73,8 +72,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
   for (const row of profileResult.results) {
     profiles[row.name] = {
       registry: row.registry,
-      usernameEnv: row.username_env || undefined,
-      passwordEnv: row.password_env || undefined,
+      credentialRegistry: row.credential_registry || '',
     }
   }
 
@@ -120,8 +118,8 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
   for (const [name, p] of Object.entries(profiles)) {
     statements.push(
       db
-        .prepare('INSERT INTO profiles (user_id, name, registry, username_env, password_env) VALUES (?, ?, ?, ?, ?)')
-        .bind(userId, name, p.registry ?? '', p.usernameEnv ?? '', p.passwordEnv ?? '')
+        .prepare('INSERT INTO profiles (user_id, name, registry, credential_registry) VALUES (?, ?, ?, ?)')
+        .bind(userId, name, p.registry ?? '', p.credentialRegistry ?? '')
     )
   }
 
