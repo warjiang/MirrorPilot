@@ -67,15 +67,31 @@ MirrorPilot uses **GitHub OAuth** for authentication:
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
 2. Click **"New OAuth App"**
 3. Fill in:
-   - **Application name**: `MirrorPilot` (or any name)
-   - **Homepage URL**: `https://mirrotpilot.20220625.xyz`
-   - **Authorization callback URL**: `https://mirrotpilot.20220625.xyz/api/auth/callback`
+   - **Application name**: `MirrorPilot`
+   - **Homepage URL**: `https://mirrotpilot.20220625.xyz` (your production domain)
+   - **Authorization callback URL**: Leave empty for now (we'll set multiple URLs in the next step)
 4. Click **"Register application"**
 5. Copy the **Client ID**
 6. Click **"Generate a new client secret"** and copy the **Client Secret**
 
-> ⚠️ For preview deployments (e.g. `feat-auth.mirrorpilot.pages.dev`), create a
-> separate OAuth App or update the callback URL accordingly.
+#### 1b. Configure Callback URLs
+
+> ✅ One GitHub OAuth App can support **multiple callback URLs**. You don't need separate apps for local/staging/production.
+
+1. Go back to your OAuth App settings
+2. Scroll down to **Authorization callback URLs**
+3. Enter all the URLs you need (one per line):
+   ```
+   http://localhost:8788/api/auth/callback
+   http://localhost:5173/api/auth/callback
+   https://your-preview.mirrorpilot.pages.dev/api/auth/callback
+   https://mirrotpilot.20220625.xyz/api/auth/callback
+   https://www.mirrotpilot.20220625.xyz/api/auth/callback
+   ```
+4. Save
+
+> ⚠️ **Important**: Each URL must match **exactly** (no wildcards like `https://*.yourdomain.com`).
+> Remove URLs you don't need; only leave the ones you're actually using.
 
 #### 2. Configure Cloudflare Pages secrets
 
@@ -228,7 +244,11 @@ pnpm wrangler d1 create mirrorpilot --local
 pnpm wrangler d1 migrations apply mirrorpilot --local
 
 # 2. Create GitHub OAuth App at https://github.com/settings/developers
-# Set Authorization callback URL to: http://localhost:8788/api/auth/callback
+# Add these callback URLs to your OAuth App settings:
+#   - http://localhost:8788/api/auth/callback (local wrangler)
+#   - http://localhost:5173/api/auth/callback (local vite)
+#   - https://your-production-domain.com/api/auth/callback
+# (See README.md for full setup instructions)
 
 # 3. Configure .dev.vars with OAuth credentials
 cat > .dev.vars << 'EOF'

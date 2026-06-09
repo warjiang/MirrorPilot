@@ -2,20 +2,34 @@
 
 ## Prerequisites Setup
 
-### 1. Create GitHub OAuth App (for local development)
+### 1. Create GitHub OAuth App
 
 1. Go to https://github.com/settings/developers
 2. Click **New OAuth App**
 3. Fill in the form:
-   - **Application name**: `MirrorPilot (Local Dev)`
-   - **Homepage URL**: `http://localhost:8788`
-   - **Authorization callback URL**: `http://localhost:8788/api/auth/callback`
+   - **Application name**: `MirrorPilot`
+   - **Homepage URL**: `http://localhost:8788` (or your production URL)
+   - **Authorization callback URL**: (see below)
 4. Click **Register application**
 5. You'll see your **Client ID** and can generate a **Client Secret**
 
-> ⚠️ **Important**: This is different from production. You need:
-> - A separate OAuth app for local development (localhost)
-> - A production OAuth app (your domain)
+#### Authorization Callback URLs
+
+**Good news**: GitHub OAuth Apps support **multiple callback URLs**. You can configure both local development and production in a **single OAuth App**.
+
+1. Go to your OAuth App settings at https://github.com/settings/developers
+2. Find your app and click **Edit**
+3. In **Authorization callback URLs**, enter all URLs you need:
+   ```
+   http://localhost:8788/api/auth/callback
+   http://localhost:5173/api/auth/callback
+   https://your-production-domain.com/api/auth/callback
+   https://www.your-production-domain.com/api/auth/callback
+   ```
+
+4. Save changes
+
+> ✅ **Each URL must be listed exactly** (no wildcards like `https://*.yourdomain.com`)
 
 ### 2. Initialize D1 Database
 
@@ -81,6 +95,8 @@ This runs Wrangler on http://localhost:8788:
 Then visit: **http://localhost:8788**
 
 ## Troubleshooting
+
+For detailed OAuth troubleshooting (e.g., redirect_uri mismatch), see [OAUTH_TROUBLESHOOTING.md](./OAUTH_TROUBLESHOOTING.md).
 
 ### GitHub Client ID undefined
 
