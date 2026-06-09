@@ -348,12 +348,11 @@ function ProfileFormInline({
         </div>
         <div className="flex flex-col gap-1.5 sm:col-span-2">
           <Label>Credentials</Label>
-          <Select value={form.credentialRegistry} onValueChange={(value) => setForm({ ...form, credentialRegistry: value })}>
+          <Select value={form.credentialRegistry || ''} onValueChange={(value) => setForm({ ...form, credentialRegistry: value })}>
             <SelectTrigger>
               <SelectValue placeholder="Select saved credentials..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
               {savedCredentials.map((cred) => (
                 <SelectItem key={cred.registry} value={cred.registry}>
                   {cred.registry} ({cred.destUser})
