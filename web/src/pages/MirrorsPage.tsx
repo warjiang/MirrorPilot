@@ -421,7 +421,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
                   <TableHeader>
                     <TableRow>
                       <TableHead
-                        className="w-[68px] cursor-pointer select-none"
+                        className="w-[88px] cursor-pointer select-none"
                         onClick={() => toggleSort('enabled')}
                       >
                         Status <SortIndicator active={sortField === 'enabled'} dir={sortDir} />
@@ -446,7 +446,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
                           key={`${entry.source}-${originalIndex}`}
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
-                          <TableCell className="py-2">
+                          <TableCell className="py-2 pr-3">
                             <div className="flex flex-wrap items-center gap-1">
                               <SyncStatusBadge entry={entry} />
                               {!entry.enabled ? (
