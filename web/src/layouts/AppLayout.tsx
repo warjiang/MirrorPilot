@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Container, ExternalLink, Loader2, Upload, Download, Moon, Sun } from 'lucide-react'
+import { Container, ExternalLink, Loader2, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
@@ -8,8 +8,6 @@ interface Props {
   loading: boolean
   syncing: boolean
   error: string | null
-  onSync: () => void
-  onLoad: () => void
 }
 
 const navItems = [
@@ -18,7 +16,7 @@ const navItems = [
   { to: '/settings', label: 'Settings' },
 ]
 
-export function AppLayout({ loading, syncing, error, onSync, onLoad }: Props) {
+export function AppLayout({ loading, syncing, error }: Props) {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('mirrorpilot.theme') === 'dark' ||
@@ -59,26 +57,9 @@ export function AppLayout({ loading, syncing, error, onSync, onLoad }: Props) {
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onLoad}
-                  disabled={loading}
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : <Download />}
-                  Pull
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={onSync}
-                  disabled={syncing}
-                >
-                  {syncing ? <Loader2 className="animate-spin" /> : <Upload />}
-                  Push
-                </Button>
-              </>
+            {(loading || syncing) && (
+              <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            )}
             <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
               {dark ? <Sun /> : <Moon />}
             </Button>

@@ -8,7 +8,7 @@ import { AuthGuard } from '@/components/AuthGuard'
 import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 
 export function AppRouter() {
-  const { config, setConfig, loading, syncing, error, load, save } =
+  const { config, setConfig, loading, syncing, error } =
     useCloudflareStorage()
 
   return (
@@ -23,8 +23,6 @@ export function AppRouter() {
                   loading={loading}
                   syncing={syncing}
                   error={error}
-                  onSync={save}
-                  onLoad={load}
                 />
               )}
             </AuthGuard>
