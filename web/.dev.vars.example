@@ -1,0 +1,19 @@
+# Copy to .dev.vars for local development:
+# cp .dev.vars.example .dev.vars
+
+# Optional: bypass OAuth and auto-login as this user in local dev
+DEV_USER_EMAIL=dev@localhost
+
+# GitHub OAuth App (required when DEV_USER_EMAIL is not set)
+GITHUB_CLIENT_ID=replace-with-your-github-client-id
+GITHUB_CLIENT_SECRET=replace-with-your-github-client-secret
+
+# GitHub repo integration (sync trigger/status)
+GITHUB_REPO=owner/repo
+GITHUB_TOKEN=replace-with-your-github-personal-access-token
+
+# Shared secret for sync webhook endpoints
+SYNC_SECRET=replace-with-random-secret
+
+# Optional: grant local admin role
+ADMIN_EMAIL=dev@localhost

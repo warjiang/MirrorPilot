@@ -3,11 +3,14 @@ import { Container, ExternalLink, Loader2, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEffect, useState } from 'react'
+import type { User } from '@/hooks/useAuth'
 
 interface Props {
   loading: boolean
   syncing: boolean
   error: string | null
+  user: User
+  onLogout: () => Promise<void>
 }
 
 const navItems = [
@@ -16,7 +19,7 @@ const navItems = [
   { to: '/settings', label: 'Settings' },
 ]
 
-export function AppLayout({ loading, syncing, error }: Props) {
+export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('mirrorpilot.theme') === 'dark' ||
@@ -60,6 +63,19 @@ export function AppLayout({ loading, syncing, error }: Props) {
             {(loading || syncing) && (
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
             )}
+            <div className="flex items-center gap-2">
+              <img
+                src={user.avatar_url}
+                alt={user.name}
+                className="size-7 rounded-full border object-cover"
+              />
+              <span className="hidden max-w-[180px] truncate text-xs text-muted-foreground md:inline" title={user.email}>
+                {user.email}
+              </span>
+              <Button variant="outline" size="sm" onClick={onLogout}>
+                Logout
+              </Button>
+            </div>
             <Button variant="ghost" size="icon" onClick={() => setDark(!dark)} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>
               {dark ? <Sun /> : <Moon />}
             </Button>

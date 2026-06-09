@@ -4,11 +4,11 @@ import { useAuth } from '@/hooks/useAuth'
 import type { User } from '@/hooks/useAuth'
 
 interface AuthGuardProps {
-  children: (user: User) => ReactNode
+  children: (auth: { user: User; logout: () => Promise<void> }) => ReactNode
 }
 
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { user, loading } = useAuth()
+  const { user, loading, logout } = useAuth()
 
   if (loading) {
     return (
@@ -22,5 +22,5 @@ export function AuthGuard({ children }: AuthGuardProps) {
     return <Navigate to="/" replace />
   }
 
-  return <>{children(user)}</>
+  return <>{children({ user, logout })}</>
 }

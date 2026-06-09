@@ -45,6 +45,12 @@ pnpm wrangler d1 migrations apply mirrorpilot --local
 
 ### 3. Configure .dev.vars
 
+Start from template:
+
+```bash
+cp .dev.vars.example .dev.vars
+```
+
 Update `.dev.vars` with your local credentials:
 
 ```bash
@@ -81,7 +87,7 @@ pnpm dev
 
 This runs Vite on http://localhost:5173 with hot module reload.
 
-### Terminal 2 - Wrangler Pages Dev (with API Functions)
+### Terminal 2 - Wrangler Pages Dev (API Functions + D1)
 
 ```bash
 cd web
@@ -89,10 +95,12 @@ pnpm dev:cf
 ```
 
 This runs Wrangler on http://localhost:8788:
-- Proxies `/api/*` to Pages Functions
-- Everything else proxies to Vite (port 5173)
+- Serves Pages Functions (`/api/*`) + local D1
+- Frontend assets and HMR are served by Vite directly on `5173`
 
-Then visit: **http://localhost:8788**
+Then visit: **http://localhost:5173**
+
+Vite is configured to proxy `/api/*` to Wrangler (`8788`), so API calls still work while HMR stays reliable.
 
 ## Troubleshooting
 
@@ -144,10 +152,9 @@ pnpm dev:cf
 
 ### CORS Issues in Local Dev
 
-Local development uses two ports (5173 and 8788), but Wrangler proxies requests correctly:
-- Browser requests → http://localhost:8788 (Wrangler)
-- `/api/*` → D1 + Functions
-- Everything else → http://localhost:5173 (Vite)
+Local development uses two ports:
+- Browser requests → http://localhost:5173 (Vite with HMR)
+- `/api/*` from Vite → proxied to http://localhost:8788 (Wrangler Functions + D1)
 
 If you see CORS errors:
 1. Hard refresh browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows)
@@ -175,12 +182,12 @@ If you see CORS errors:
 - [ ] Ran `pnpm wrangler d1 migrations apply mirrorpilot --local`
 - [ ] Started Terminal 1: `pnpm dev`
 - [ ] Started Terminal 2: `pnpm dev:cf`
-- [ ] Visited http://localhost:8788
+- [ ] Visited http://localhost:5173
 - [ ] Logged in (either via DEV_USER_EMAIL or GitHub OAuth)
 
 ## Next Steps
 
 - Start dev servers (see "Running Local Development" above)
-- Visit http://localhost:8788
+- Visit http://localhost:5173
 - Sign in with GitHub OAuth or as dev user
 - Make changes and watch HMR work!

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:cf": "wrangler pages dev --proxy 5173",
+    "dev:cf": "wrangler pages dev --port 8788 --show-interactive-dev-session=false",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "typecheck": "tsc -b && tsc -p tsconfig.functions.json",

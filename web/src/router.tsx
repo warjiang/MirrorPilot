@@ -18,11 +18,13 @@ export function AppRouter() {
         <Route
           element={
             <AuthGuard>
-              {() => (
+              {({ user, logout }) => (
                 <AppLayout
                   loading={loading}
                   syncing={syncing}
                   error={error}
+                  user={user}
+                  onLogout={logout}
                 />
               )}
             </AuthGuard>
