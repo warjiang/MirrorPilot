@@ -12,7 +12,7 @@ interface RegistrySecret {
 
 export function RegistrySecretsPanel() {
   const [secrets, setSecrets] = useState<RegistrySecret[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [newSecret, setNewSecret] = useState({ registry: '', destUser: '', destPass: '' })
   const [saving, setSaving] = useState(false)
@@ -24,15 +24,16 @@ export function RegistrySecretsPanel() {
   async function fetchSecrets() {
     try {
       setLoading(true)
+      setError(null)
       const res = await fetch('/api/secrets/registry')
       if (!res.ok) {
-        throw new Error('Failed to fetch secrets')
+        throw new Error(`Failed to fetch secrets (HTTP ${res.status})`)
       }
       const data = await res.json() as { secrets: RegistrySecret[] }
-      setSecrets(data.secrets)
-      setError(null)
+      setSecrets(data.secrets || [])
     } catch (err) {
       setError((err as Error).message)
+      setSecrets([])
     } finally {
       setLoading(false)
     }
