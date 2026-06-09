@@ -4,9 +4,9 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // Dev bypass: return dev user when DEV_USER_EMAIL is configured
   if (env.DEV_USER_EMAIL) {
     const user = await env.DB.prepare(
-      'SELECT id, email, name, avatar_url FROM users WHERE email = ?'
+      'SELECT id, email, name, avatar_url, is_admin FROM users WHERE email = ?'
     ).bind(env.DEV_USER_EMAIL.toLowerCase().trim()).first()
-    return Response.json({ user: user || { id: 0, email: env.DEV_USER_EMAIL, name: 'Dev User', avatar_url: '' } })
+    return Response.json({ user: user || { id: 0, email: env.DEV_USER_EMAIL, name: 'Dev User', avatar_url: '', is_admin: 0 } })
   }
 
   const cookie = request.headers.get('Cookie') || ''
@@ -25,7 +25,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   const user = await env.DB.prepare(
-    'SELECT id, email, name, avatar_url FROM users WHERE id = ?'
+    'SELECT id, email, name, avatar_url, is_admin FROM users WHERE id = ?'
   ).bind(session.user_id).first()
 
   return Response.json({ user })

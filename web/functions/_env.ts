@@ -6,4 +6,5 @@ export interface Env {
   GITHUB_REPO: string
   SYNC_SECRET: string
   DEV_USER_EMAIL?: string
+  ADMIN_EMAIL?: string
 }

@@ -21,11 +21,34 @@ export function useCloudflareStorage() {
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const mountedRef = useRef(true)
+  const pendingSaveRef = useRef(false)
 
   useEffect(() => {
     try {
       localStorage.setItem(CONFIG_KEY, JSON.stringify(config))
     } catch { /* ignore */ }
+  }, [config])
+
+  // Auto-save to backend when config changes (debounced via pending flag)
+  useEffect(() => {
+    if (!pendingSaveRef.current) return
+    pendingSaveRef.current = false
+    const controller = new AbortController()
+    setSyncing(true)
+    saveConfig(config)
+      .then(() => {
+        if (mountedRef.current) toast('Config saved')
+      })
+      .catch((e: unknown) => {
+        if (!mountedRef.current) return
+        const msg = e instanceof Error ? e.message : String(e)
+        setError(msg)
+        toast(msg, 'error')
+      })
+      .finally(() => {
+        if (mountedRef.current) setSyncing(false)
+      })
+    return () => controller.abort()
   }, [config])
 
   // Initial fetch — inlined to avoid synchronous setState inside the effect
@@ -82,6 +105,7 @@ export function useCloudflareStorage() {
   }, [config])
 
   const setConfig = useCallback((updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => {
+    pendingSaveRef.current = true
     setConfigState((prev) => typeof updater === 'function' ? updater(prev) : updater)
   }, [])
 

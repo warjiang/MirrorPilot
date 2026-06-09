@@ -132,6 +132,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
+  const [latestRun, setLatestRun] = useState<{ status: string; conclusion: string | null; url: string } | null>(null)
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -307,11 +308,39 @@ export function MirrorsPage({ config, setConfig }: Props) {
         }),
       }))
       toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'}`)
+      // Start polling for workflow run status
+      pollSyncStatus()
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
       toast(message, 'error')
     } finally {
       setSyncingNow(false)
+    }
+  }
+
+  async function pollSyncStatus() {
+    // Wait a few seconds for the run to appear
+    await new Promise((r) => setTimeout(r, 3000))
+    for (let i = 0; i < 60; i++) {
+      try {
+        const res = await fetch('/api/sync/status')
+        if (res.ok) {
+          const data = await res.json() as { runs: Array<{ status: string; conclusion: string | null; url: string }> }
+          const run = data.runs[0]
+          if (run) {
+            setLatestRun(run)
+            if (run.status === 'completed') {
+              if (run.conclusion === 'success') {
+                toast('Sync completed successfully!', 'success')
+              } else {
+                toast(`Sync finished with status: ${run.conclusion}`, 'error')
+              }
+              return
+            }
+          }
+        }
+      } catch { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 5000))
     }
   }
 
@@ -330,6 +359,25 @@ export function MirrorsPage({ config, setConfig }: Props) {
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            {latestRun && (
+              <a
+                href={latestRun.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs flex items-center gap-1 px-2 py-1 rounded border hover:bg-muted/50"
+              >
+                {latestRun.status === 'completed' ? (
+                  latestRun.conclusion === 'success' ? (
+                    <CheckCircle2 className="size-3 text-green-600" />
+                  ) : (
+                    <CircleAlert className="size-3 text-red-600" />
+                  )
+                ) : (
+                  <Loader2 className="size-3 animate-spin" />
+                )}
+                <span>{latestRun.status === 'completed' ? latestRun.conclusion : latestRun.status}</span>
+              </a>
+            )}
             <Button size="sm" variant="outline" onClick={handleTriggerSync} disabled={syncingNow}>
               {syncingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
               Sync
@@ -421,7 +469,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
                   <TableHeader>
                     <TableRow>
                       <TableHead
-                        className="w-[68px] cursor-pointer select-none"
+                        className="w-[88px] cursor-pointer select-none"
                         onClick={() => toggleSort('enabled')}
                       >
                         Status <SortIndicator active={sortField === 'enabled'} dir={sortDir} />
@@ -446,7 +494,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
                           key={`${entry.source}-${originalIndex}`}
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
-                          <TableCell className="py-2">
+                          <TableCell className="py-2 pr-3">
                             <div className="flex flex-wrap items-center gap-1">
                               <SyncStatusBadge entry={entry} />
                               {!entry.enabled ? (

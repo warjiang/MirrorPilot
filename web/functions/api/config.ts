@@ -40,8 +40,8 @@ async function getOrCreateUser(db: D1Database, email: string): Promise<number> {
 interface ProfileRow {
   name: string
   registry: string
-  username_env: string
-  password_env: string
+  username: string
+  password: string
 }
 
 interface ImageRow {
@@ -60,7 +60,7 @@ interface ImageRow {
 async function handleGet(db: D1Database, userId: number): Promise<Response> {
   const [profileResult, imageResult] = await Promise.all([
     db
-      .prepare('SELECT name, registry, username_env, password_env FROM profiles WHERE user_id = ? ORDER BY name ASC')
+      .prepare('SELECT name, registry, username_env AS username, password_env AS password FROM profiles WHERE user_id = ? ORDER BY name ASC')
       .bind(userId)
       .all<ProfileRow>(),
     db
@@ -73,8 +73,8 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
   for (const row of profileResult.results) {
     profiles[row.name] = {
       registry: row.registry,
-      usernameEnv: row.username_env || undefined,
-      passwordEnv: row.password_env || undefined,
+      username: row.username || undefined,
+      password: row.password || undefined,
     }
   }
 
@@ -121,7 +121,7 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
     statements.push(
       db
         .prepare('INSERT INTO profiles (user_id, name, registry, username_env, password_env) VALUES (?, ?, ?, ?, ?)')
-        .bind(userId, name, p.registry ?? '', p.usernameEnv ?? '', p.passwordEnv ?? '')
+        .bind(userId, name, p.registry ?? '', p.username ?? '', p.password ?? '')
     )
   }
 

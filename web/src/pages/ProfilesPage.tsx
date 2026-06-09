@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, Wifi, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Pencil, Trash2, Wifi, Search, ChevronDown, ChevronRight, Eye, EyeOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,26 +8,23 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from '@/components/Toaster'
-import type { Credentials } from '@/components/EntriesTable'
 import type { MirrorConfig, RegistryProfile, CheckRegistryResponse } from '@/lib/types'
 
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
-  credentials: Record<string, Credentials>
-  setCredentials: (updater: Record<string, Credentials> | ((prev: Record<string, Credentials>) => Record<string, Credentials>)) => void
 }
 
 interface FormState {
   name: string
   registry: string
-  usernameEnv: string
-  passwordEnv: string
+  username: string
+  password: string
 }
 
-const emptyForm: FormState = { name: '', registry: '', usernameEnv: '', passwordEnv: '' }
+const emptyForm: FormState = { name: '', registry: '', username: '', password: '' }
 
-export function ProfilesPage({ config, setConfig, credentials, setCredentials }: Props) {
+export function ProfilesPage({ config, setConfig }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm)
@@ -36,6 +33,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
   const [searchQuery, setSearchQuery] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   const profileNames = Object.keys(config.profiles)
 
@@ -47,8 +45,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
       return (
         name.toLowerCase().includes(q) ||
         p.registry.toLowerCase().includes(q) ||
-        (p.usernameEnv?.toLowerCase().includes(q) ?? false) ||
-        (p.passwordEnv?.toLowerCase().includes(q) ?? false)
+        (p.username?.toLowerCase().includes(q) ?? false)
       )
     })
   }, [profileNames, config.profiles, searchQuery])
@@ -67,14 +64,16 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
     setEditing(null)
     setForm(emptyForm)
     setError(null)
+    setShowPassword(false)
   }
 
   function startEdit(name: string) {
     const p = config.profiles[name]
     setEditing(name)
     setCreating(false)
-    setForm({ name, registry: p.registry, usernameEnv: p.usernameEnv ?? '', passwordEnv: p.passwordEnv ?? '' })
+    setForm({ name, registry: p.registry, username: p.username ?? '', password: p.password ?? '' })
     setError(null)
+    setShowPassword(false)
   }
 
   function cancelForm() {
@@ -82,18 +81,19 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
     setEditing(null)
     setForm(emptyForm)
     setError(null)
+    setShowPassword(false)
   }
 
   function handleSave() {
     const trimmedName = form.name.trim()
     if (!trimmedName) { setError('Profile name is required'); return }
-    if (!form.registry.trim()) { setError('Registry is required'); return }
+    if (!form.registry.trim()) { setError('Registry URL is required'); return }
     if (creating && config.profiles[trimmedName]) { setError('Profile already exists'); return }
 
     const profile: RegistryProfile = {
       registry: form.registry.trim(),
-      usernameEnv: form.usernameEnv.trim() || undefined,
-      passwordEnv: form.passwordEnv.trim() || undefined,
+      username: form.username.trim() || undefined,
+      password: form.password || undefined,
     }
 
     setConfig((c) => {
@@ -107,6 +107,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
       }
       return { ...c, profiles: { ...profiles, [trimmedName]: profile } }
     })
+    toast(creating ? `Created profile "${trimmedName}"` : `Updated profile "${trimmedName}"`)
     cancelForm()
   }
 
@@ -123,18 +124,12 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
       const images = c.images.filter((img) => img.profile !== deleteTarget)
       return { ...c, profiles, images }
     })
-    setCredentials((cr) => {
-      const next = { ...cr }
-      delete next[deleteTarget]
-      return next
-    })
     toast(`Deleted profile "${deleteTarget}"${imageCount ? ` and ${imageCount} linked image${imageCount > 1 ? 's' : ''}` : ''}`)
     setDeleteTarget(null)
   }
 
   async function checkRegistry(name: string) {
     const profile = config.profiles[name]
-    const creds = credentials[name]
     setCheckResults((r) => ({ ...r, [name]: { loading: true } }))
     try {
       const res = await fetch('/api/check-registry', {
@@ -142,8 +137,8 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           registry: profile.registry,
-          username: creds?.username,
-          password: creds?.password,
+          username: profile.username,
+          password: profile.password,
         }),
       })
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -162,7 +157,8 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             <div>
               <CardTitle>Registry Profiles</CardTitle>
               <CardDescription>
-                Each profile defines a destination registry where images are mirrored to. Credentials entered here are used only for connectivity checks and are never stored.
+                Each profile defines a destination registry and its authentication credentials.
+                Images are mirrored to the registry configured in their assigned profile.
               </CardDescription>
             </div>
             <Button size="sm" onClick={startCreate} disabled={creating || !!editing}>
@@ -172,11 +168,13 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {(creating || editing) && (
-            <ProfileFormInline
+            <ProfileForm
               form={form}
               setForm={setForm}
               error={error}
               isCreate={creating}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
               onSave={handleSave}
               onCancel={cancelForm}
             />
@@ -186,7 +184,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             <div className="py-12 text-center">
               <p className="text-foreground font-medium">No registry profiles yet</p>
               <p className="text-muted-foreground mt-1 text-sm">
-                A profile defines where your mirrored images are pushed (registry URL + credentials).
+                A profile defines where your mirrored images are pushed — registry URL + credentials.
               </p>
               <Button size="sm" onClick={startCreate} className="mt-4">
                 <Plus /> Create your first profile
@@ -198,7 +196,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             <div className="relative">
               <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
               <Input
-                placeholder="Filter by name, registry..."
+                placeholder="Filter profiles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9"
@@ -216,7 +214,6 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
             if (editing === name) return null
             const p = config.profiles[name]
             const check = checkResults[name]
-            const creds = credentials[name] ?? { username: '', password: '' }
             const isExpanded = expanded.has(name)
             const imageCount = config.images.filter((img) => img.profile === name).length
             return (
@@ -229,6 +226,9 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
                     {isExpanded ? <ChevronDown className="size-4 text-muted-foreground shrink-0" /> : <ChevronRight className="size-4 text-muted-foreground shrink-0" />}
                     <span className="font-medium truncate">{name}</span>
                     <Badge variant="outline" className="font-mono text-xs shrink-0">{p.registry || '(not set)'}</Badge>
+                    {p.username && (
+                      <Badge variant="secondary" className="text-xs shrink-0">🔑 {p.username}</Badge>
+                    )}
                     {imageCount > 0 && (
                       <span className="text-muted-foreground text-xs shrink-0">{imageCount} image{imageCount !== 1 ? 's' : ''}</span>
                     )}
@@ -239,7 +239,7 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
                     )}
                   </div>
                   <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="icon" title="Check registry" onClick={() => checkRegistry(name)} disabled={check?.loading}>
+                    <Button variant="ghost" size="icon" title="Check connectivity" onClick={() => checkRegistry(name)} disabled={check?.loading}>
                       <Wifi className={check?.loading ? 'animate-pulse' : ''} />
                     </Button>
                     <Button variant="ghost" size="icon" title="Edit" onClick={() => startEdit(name)}>
@@ -251,45 +251,33 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
                   </div>
                 </div>
                 {isExpanded && (
-                  <div className="border-t px-4 py-3 space-y-3 bg-muted/30">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs">Username (for detection only)</Label>
-                        <Input
-                          placeholder="registry username"
-                          value={creds.username}
-                          autoComplete="off"
-                          onChange={(e) => setCredentials((cr) => ({ ...cr, [name]: { ...creds, username: e.target.value } }))}
-                        />
+                  <div className="border-t px-4 py-3 space-y-2 bg-muted/30">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground text-xs">Registry</span>
+                        <p className="font-mono">{p.registry || '—'}</p>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs">Password (for detection only)</Label>
-                        <Input
-                          type="password"
-                          placeholder="registry password"
-                          value={creds.password}
-                          autoComplete="off"
-                          onChange={(e) => setCredentials((cr) => ({ ...cr, [name]: { ...creds, password: e.target.value } }))}
-                        />
+                      <div>
+                        <span className="text-muted-foreground text-xs">Username</span>
+                        <p className="font-mono">{p.username || '—'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground text-xs">Password</span>
+                        <p className="font-mono">{p.password ? '••••••••' : '—'}</p>
                       </div>
                     </div>
-                    {p.usernameEnv && (
-                      <p className="text-muted-foreground text-xs">
-                        CI credentials: <code className="bg-muted px-1 rounded">{p.usernameEnv}</code> / <code className="bg-muted px-1 rounded">{p.passwordEnv}</code>
-                      </p>
-                    )}
                     {check?.result && (
-                      <div className="flex gap-3 text-xs">
-                        <span className={check.result.reachable.ok ? 'text-success' : 'text-destructive'}>
+                      <div className="flex gap-3 text-xs pt-2 border-t">
+                        <span className={check.result.reachable.ok ? 'text-green-600' : 'text-red-600'}>
                           Reachable: {check.result.reachable.message}
                         </span>
-                        <span className={check.result.auth.ok ? 'text-success' : 'text-destructive'}>
+                        <span className={check.result.auth.ok ? 'text-green-600' : 'text-red-600'}>
                           Auth: {check.result.auth.message}
                         </span>
                       </div>
                     )}
                     {check?.error && (
-                      <p className="text-destructive text-xs">{check.error}</p>
+                      <p className="text-red-600 text-xs">{check.error}</p>
                     )}
                   </div>
                 )}
@@ -312,52 +300,65 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
   )
 }
 
-function ProfileFormInline({
-  form, setForm, error, isCreate, onSave, onCancel,
+function ProfileForm({
+  form, setForm, error, isCreate, showPassword, setShowPassword, onSave, onCancel,
 }: {
   form: FormState
   setForm: (f: FormState) => void
   error: string | null
   isCreate: boolean
+  showPassword: boolean
+  setShowPassword: (v: boolean) => void
   onSave: () => void
   onCancel: () => void
 }) {
   return (
-    <div className="rounded-lg border border-dashed p-4 space-y-3">
+    <div className="rounded-lg border border-dashed p-4 space-y-4">
       <p className="text-sm font-medium">{isCreate ? 'New Profile' : `Edit: ${form.name}`}</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label>Profile name</Label>
+          <Label>Profile Name</Label>
           <Input
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
             disabled={!isCreate}
-            placeholder="default"
+            placeholder="e.g. aliyun-prod"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Registry</Label>
+          <Label>Registry URL</Label>
           <Input
             value={form.registry}
             onChange={(e) => setForm({ ...form, registry: e.target.value })}
-            placeholder="registry.cn-shanghai.aliyuncs.com/namespace"
+            placeholder="e.g. registry.cn-shanghai.aliyuncs.com/namespace"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Username env var</Label>
+          <Label>Username</Label>
           <Input
-            value={form.usernameEnv}
-            onChange={(e) => setForm({ ...form, usernameEnv: e.target.value })}
-            placeholder="DEST_REGISTRY_USER"
+            value={form.username}
+            onChange={(e) => setForm({ ...form, username: e.target.value })}
+            placeholder="Registry username"
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Password env var</Label>
-          <Input
-            value={form.passwordEnv}
-            onChange={(e) => setForm({ ...form, passwordEnv: e.target.value })}
-            placeholder="DEST_REGISTRY_PASSWORD"
-          />
+          <Label>Password</Label>
+          <div className="relative">
+            <Input
+              type={showPassword ? 'text' : 'password'}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder="Registry password or token"
+              className="pr-10"
+            />
+            <button
+              type="button"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            </button>
+          </div>
         </div>
       </div>
       {error && <p className="text-destructive text-sm">{error}</p>}

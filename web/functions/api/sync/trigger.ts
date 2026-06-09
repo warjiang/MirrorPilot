@@ -1,29 +1,61 @@
 import type { Env } from '../../_env'
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+interface ImageRow {
+  id: number
+  source: string
+  target: string
+  profile: string
+  registry: string | null
+  username_env: string | null
+  password_env: string | null
+}
+
+async function getUserId(request: Request, env: Env): Promise<number | null> {
   const cookie = request.headers.get('Cookie') || ''
   const match = cookie.match(/mp_session=([^;]+)/)
-  if (!match) {
+  if (match) {
+    const session = await env.DB.prepare(
+      "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')"
+    ).bind(match[1]).first<{ user_id: number }>()
+    if (session) return session.user_id
+  }
+  if (env.DEV_USER_EMAIL) {
+    const user = await env.DB.prepare(
+      'SELECT id FROM users WHERE email = ?'
+    ).bind(env.DEV_USER_EMAIL.toLowerCase().trim()).first<{ id: number }>()
+    if (user) return user.id
+  }
+  return null
+}
+
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const userId = await getUserId(request, env)
+  if (!userId) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const session = await env.DB.prepare(
-    "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')"
-  ).bind(match[1]).first<{ user_id: number }>()
+  // Fetch images with their profile credentials in one query
+  const result = await env.DB.prepare(`
+    SELECT i.id, i.source, i.target, i.profile,
+           p.registry, p.username_env, p.password_env
+    FROM images i
+    LEFT JOIN profiles p ON p.user_id = i.user_id AND p.name = i.profile
+    WHERE i.user_id = ? AND i.enabled = 1 AND i.status NOT IN ('synced', 'syncing')
+  `).bind(userId).all<ImageRow>()
 
-  if (!session) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const images = await env.DB.prepare(
-    "SELECT id FROM images WHERE user_id = ? AND enabled = 1 AND status NOT IN ('synced', 'syncing')"
-  ).bind(session.user_id).all<{ id: number }>()
-
-  if (!images.results.length) {
+  if (!result.results.length) {
     return Response.json({ ok: false, message: 'No images to sync' })
   }
 
-  const imageIds = images.results.map((image) => image.id)
+  const images = result.results.map((row) => ({
+    id: row.id,
+    source: row.source,
+    target: row.target,
+    registry: row.registry || '',
+    username: row.username_env || '',
+    password: row.password_env || '',
+  }))
+
   const dispatchRes = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
     method: 'POST',
     headers: {
@@ -36,8 +68,8 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     body: JSON.stringify({
       event_type: 'web-sync',
       client_payload: {
-        user_id: session.user_id,
-        image_ids: imageIds,
+        user_id: userId,
+        images,
       },
     }),
   })
@@ -47,10 +79,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return Response.json({ ok: false, message: `GitHub dispatch failed: ${text}` }, { status: 502 })
   }
 
+  // Mark images as syncing
+  const imageIds = images.map((img) => img.id)
   const placeholders = imageIds.map(() => '?').join(',')
   await env.DB.prepare(
     `UPDATE images SET status = 'syncing' WHERE id IN (${placeholders})`
   ).bind(...imageIds).run()
 
-  return Response.json({ ok: true, count: imageIds.length })
+  return Response.json({ ok: true, count: images.length })
 }

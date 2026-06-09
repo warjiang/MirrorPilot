@@ -67,15 +67,31 @@ MirrorPilot uses **GitHub OAuth** for authentication:
 1. Go to [GitHub Developer Settings](https://github.com/settings/developers)
 2. Click **"New OAuth App"**
 3. Fill in:
-   - **Application name**: `MirrorPilot` (or any name)
-   - **Homepage URL**: `https://mirrotpilot.20220625.xyz`
-   - **Authorization callback URL**: `https://mirrotpilot.20220625.xyz/api/auth/callback`
+   - **Application name**: `MirrorPilot`
+   - **Homepage URL**: `https://mirrotpilot.20220625.xyz` (your production domain)
+   - **Authorization callback URL**: Leave empty for now (we'll set multiple URLs in the next step)
 4. Click **"Register application"**
 5. Copy the **Client ID**
 6. Click **"Generate a new client secret"** and copy the **Client Secret**
 
-> ⚠️ For preview deployments (e.g. `feat-auth.mirrorpilot.pages.dev`), create a
-> separate OAuth App or update the callback URL accordingly.
+#### 1b. Configure Callback URLs
+
+> ✅ One GitHub OAuth App can support **multiple callback URLs**. You don't need separate apps for local/staging/production.
+
+1. Go back to your OAuth App settings
+2. Scroll down to **Authorization callback URLs**
+3. Enter all the URLs you need (one per line):
+   ```
+   http://localhost:8788/api/auth/callback
+   http://localhost:5173/api/auth/callback
+   https://your-preview.mirrorpilot.pages.dev/api/auth/callback
+   https://mirrotpilot.20220625.xyz/api/auth/callback
+   https://www.mirrotpilot.20220625.xyz/api/auth/callback
+   ```
+4. Save
+
+> ⚠️ **Important**: Each URL must match **exactly** (no wildcards like `https://*.yourdomain.com`).
+> Remove URLs you don't need; only leave the ones you're actually using.
 
 #### 2. Configure Cloudflare Pages secrets
 
@@ -100,24 +116,28 @@ Or via Cloudflare Dashboard:
 1. Go to **Pages** → your project → **Settings** → **Environment variables**
 2. Add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` for both Production and Preview
 
-#### 3. Configure GitHub Actions secrets (for web-triggered sync)
+#### 3. Configure Registry Credentials (for web-triggered sync)
 
-If you want the "Sync" button in the Web UI to trigger GitHub Actions:
+If you want the "Sync" button in the Web UI to trigger GitHub Actions, you need to configure destination registry credentials in the Web UI:
 
-| Secret | Description |
-|--------|-------------|
-| `WEB_API_BASE_URL` | Your production URL (set to `https://mirrotpilot.20220625.xyz`) |
-| `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
-| `DEST_REGISTRY_USER` | Destination registry username |
-| `DEST_REGISTRY_PASSWORD` | Destination registry password |
+1. Go to **Settings** in the Web UI
+2. In the **Registry Credentials** section, click **Add Registry Credential**
+3. Enter:
+   - **Registry URL**: your destination registry (e.g., `registry.example.com`)
+   - **Username**: registry username
+   - **Password**: registry password
+4. Click **Save Credential**
 
-Also add to Cloudflare Pages environment variables:
+These credentials are stored securely in Cloudflare D1 and used by GitHub Actions sync.
+
+Also ensure these environment variables are set in Cloudflare Pages:
 
 | Variable | Description |
 |----------|-------------|
 | `GITHUB_TOKEN` | A GitHub PAT with `repo` scope (for triggering `repository_dispatch`) |
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
-| `SYNC_SECRET` | Same shared secret as configured in GitHub Actions |
+| `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
+| `ADMIN_EMAIL` | (Optional) GitHub email address of the user who should have admin privileges |
 
 > Note: `GITHUB_REPO` is the GitHub repository identifier (for example `warjiang/MirrorPilot`), not the Cloudflare Pages project name.  
 > Cloudflare Pages project name for deploy is `mirrorpilot`.
@@ -200,52 +220,56 @@ injected via environment variables at sync time.
 Configuration is stored in **Cloudflare D1** and tied to your GitHub identity.
 No setup required — use the **Pull** and **Push** buttons in the header to sync.
 
+### Registry credentials management
+Registry credentials for the sync operation are stored securely in **Cloudflare D1**:
+
+1. Go to the **Settings** page
+2. In **Registry Credentials**, add destination registry credentials
+3. These are automatically used by GitHub Actions sync via `/api/secrets/ci`
+
+Credentials are never exposed in logs or configuration files — they're fetched
+directly by the sync Action via a secure API endpoint with `SYNC_SECRET` authentication.
+
 ## Local development
 
-### Prerequisites (one-time)
+For a detailed local development guide with troubleshooting, see [LOCAL_DEVELOPMENT.md](./LOCAL_DEVELOPMENT.md).
+
+### Quick start
 
 ```bash
-# 1. Create the D1 database (requires wrangler login)
 cd web
-pnpm wrangler d1 create mirrorpilot
-# → copy the database_id into wrangler.toml
 
-# 2. Apply the schema to local SQLite
+# 1. Initialize D1 database
+pnpm wrangler d1 create mirrorpilot --local
 pnpm wrangler d1 migrations apply mirrorpilot --local
 
-# 3. Create .dev.vars (already gitignored)
+# 2. Create GitHub OAuth App at https://github.com/settings/developers
+# Add these callback URLs to your OAuth App settings:
+#   - http://localhost:8788/api/auth/callback (local wrangler)
+#   - http://localhost:5173/api/auth/callback (local vite)
+#   - https://your-production-domain.com/api/auth/callback
+# (See README.md for full setup instructions)
+
+# 3. Configure .dev.vars with OAuth credentials
 cat > .dev.vars << 'EOF'
 DEV_USER_EMAIL=dev@localhost
 GITHUB_CLIENT_ID=your-client-id
 GITHUB_CLIENT_SECRET=your-client-secret
 GITHUB_TOKEN=your-github-pat
-GITHUB_REPO=warjiang/MirrorPilot
-SYNC_SECRET=your-random-secret
+GITHUB_REPO=your-repo
+SYNC_SECRET=your-sync-secret
+ADMIN_EMAIL=dev@localhost
 EOF
-```
 
-> With `DEV_USER_EMAIL` set, authentication is bypassed in local development.
-
-### Daily development (HMR + Pages Functions)
-
-Open **two terminals**:
-
-```bash
-# Terminal 1 — Vite dev server with hot module reload (port 5173)
-cd web
+# 4. Start development servers in two terminals
+# Terminal 1:
 pnpm dev
 
-# Terminal 2 — wrangler proxies /api/* to D1, everything else to vite
-cd web
-pnpm dev:cf   # wrangler pages dev --proxy 5173
+# Terminal 2:
+pnpm dev:cf
 ```
 
-Browse to **`http://localhost:8788`** (wrangler port, not 5173).
-
-| Request | Handler |
-|---|---|
-| `/api/*` | wrangler Pages Function + local D1 |
-| Everything else | proxied to vite (HMR intact) |
+Visit **http://localhost:8788** (not 5173 — that's just the Vite server)
 
 ### Full production-build preview
 
@@ -312,7 +336,9 @@ web/
 ├── migrations/
 │   ├── 0001_init.sql           # D1 schema: users, profiles, images
 │   ├── 0002_sessions.sql       # Sessions table + user OAuth fields
-│   └── 0003_sync_status.sql    # Sync status columns on images
+│   ├── 0003_sync_status.sql    # Sync status columns on images
+│   ├── 0004_admin.sql          # Admin role support
+│   └── 0005_registry_secrets.sql # Registry credentials storage
 ├── functions/
 │   ├── _env.ts                 # Shared Env interface (DB + secrets)
 │   ├── _middleware.ts          # Auth middleware (session validation)
@@ -326,6 +352,9 @@ web/
 │       │   ├── callback.ts     # OAuth callback + session creation
 │       │   ├── me.ts           # Current user info
 │       │   └── logout.ts       # Session destruction
+│       ├── secrets/
+│       │   ├── registry.ts     # GET/POST/DELETE registry credentials (UI)
+│       │   └── ci.ts           # GET registry credentials (for CI/CD)
 │       └── sync/
 │           ├── trigger.ts      # Trigger GitHub Actions sync
 │           ├── pending.ts      # Return pending images (for Actions)
@@ -337,9 +366,10 @@ web/
 │   │   ├── LandingPage.tsx     # Public landing page
 │   │   ├── MirrorsPage.tsx     # Mirror CRUD + detection + sync
 │   │   ├── ProfilesPage.tsx    # Profile CRUD + registry check
-│   │   └── SettingsPage.tsx    # Account info
+│   │   └── SettingsPage.tsx    # Account info + registry credentials
 │   ├── components/
 │   │   ├── AuthGuard.tsx       # Route protection (redirects to landing)
+│   │   ├── RegistrySecretsPanel.tsx # Registry credentials UI
 │   │   ├── StatusBadge.tsx     # Detection result badges
 │   │   └── ui/                 # shadcn/ui primitives
 │   ├── hooks/
