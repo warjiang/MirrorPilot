@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { RegistrySecretsPanel } from '@/components/RegistrySecretsPanel'
 import { toast } from '@/components/Toaster'
 import type { Credentials } from '@/components/EntriesTable'
 import type { MirrorConfig, RegistryProfile, CheckRegistryResponse } from '@/lib/types'
@@ -298,6 +299,8 @@ export function ProfilesPage({ config, setConfig, credentials, setCredentials }:
           })}
         </CardContent>
       </Card>
+
+      <RegistrySecretsPanel />
 
       <ConfirmDialog
         open={deleteTarget !== null}

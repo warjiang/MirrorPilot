@@ -1,5 +1,4 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { RegistrySecretsPanel } from '@/components/RegistrySecretsPanel'
 
 export function SettingsPage() {
   return (
@@ -23,8 +22,6 @@ export function SettingsPage() {
           </p>
         </CardContent>
       </Card>
-
-      <RegistrySecretsPanel />
     </div>
   )
 }
