@@ -1,0 +1,81 @@
+name: Web Sync
+
+on:
+  repository_dispatch:
+    types: [web-sync]
+
+jobs:
+  sync:
+    name: Sync images from Web UI
+    runs-on: ubuntu-latest
+    env:
+      WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL != '' && secrets.WEB_API_BASE_URL || 'https://mirrotpilot.20220625.xyz' }}
+      SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
+      DEST_REGISTRY_USER: ${{ secrets.DEST_REGISTRY_USER != '' && secrets.DEST_REGISTRY_USER || secrets.ALIYUN_REGISTRY_USER }}
+      DEST_REGISTRY_PASSWORD: ${{ secrets.DEST_REGISTRY_PASSWORD != '' && secrets.DEST_REGISTRY_PASSWORD || secrets.ALIYUN_REGISTRY_PASSWORD }}
+    steps:
+      - name: Fetch pending images
+        id: fetch
+        run: |
+          USER_ID="${{ github.event.client_payload.user_id }}"
+          curl -sf \
+            -H "Authorization: Bearer $SYNC_SECRET" \
+            "$WEB_API_BASE_URL/api/sync/pending?user_id=$USER_ID" \
+            -o /tmp/pending.json
+          echo "Fetched images:"
+          cat /tmp/pending.json | jq .
+
+      - name: Set up skopeo
+        uses: warjiang/setup-skopeo@v0.1.3
+
+      - name: Sync images
+        run: |
+          echo '[]' > /tmp/results.json
+
+          jq -c '.images[]' /tmp/pending.json | while IFS= read -r img; do
+            IMAGE_ID=$(echo "$img" | jq -r '.id')
+            SOURCE=$(echo "$img" | jq -r '.source')
+            TARGET=$(echo "$img" | jq -r '.target')
+            REGISTRY=$(echo "$img" | jq -r '.registry // empty')
+
+            FULL_TARGET="${REGISTRY}/${TARGET}"
+
+            echo "::group::Syncing $SOURCE -> $FULL_TARGET"
+
+            if skopeo copy --all \
+              --dest-creds "${DEST_REGISTRY_USER}:${DEST_REGISTRY_PASSWORD}" \
+              "docker://${SOURCE}" \
+              "docker://${FULL_TARGET}"; then
+              echo "✅ Success"
+              jq --argjson id "$IMAGE_ID" '. + [{"image_id": $id, "success": true}]' /tmp/results.json > /tmp/results_new.json
+              mv /tmp/results_new.json /tmp/results.json
+            else
+              ERROR="skopeo copy failed for ${SOURCE}"
+              echo "❌ Failed: $ERROR"
+              jq --argjson id "$IMAGE_ID" --arg err "$ERROR" '. + [{"image_id": $id, "success": false, "error": $err}]' /tmp/results.json > /tmp/results_new.json
+              mv /tmp/results_new.json /tmp/results.json
+            fi
+
+            echo "::endgroup::"
+          done
+
+          echo "Results:"
+          cat /tmp/results.json | jq .
+
+      - name: Report results
+        if: always()
+        run: |
+          # If results file doesn't exist or is empty, mark all as failed
+          if [ ! -s /tmp/results.json ] || [ "$(cat /tmp/results.json)" = "[]" ]; then
+            IMAGE_IDS='${{ toJSON(github.event.client_payload.image_ids) }}'
+            echo "$IMAGE_IDS" | jq '[.[] | {image_id: ., success: false, error: "sync step failed or produced no results"}]' > /tmp/results.json
+          fi
+
+          echo "Reporting results to API:"
+          cat /tmp/results.json | jq .
+
+          curl -sf -X POST \
+            -H "Authorization: Bearer $SYNC_SECRET" \
+            -H "Content-Type: application/json" \
+            -d "{\"results\": $(cat /tmp/results.json)}" \
+            "$WEB_API_BASE_URL/api/sync/complete"

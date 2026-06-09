@@ -1,11 +1,28 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, ArrowUp, ArrowDown, Copy, Check, Search } from 'lucide-react'
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
+  ArrowUp,
+  ArrowDown,
+  Copy,
+  Check,
+  Search,
+  RefreshCw,
+  Loader2,
+  Circle,
+  CircleAlert,
+  CheckCircle2,
+} from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { triggerSync } from '@/lib/api'
 import {
   Select,
   SelectContent,
@@ -41,6 +58,7 @@ interface FormState {
 
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
+type ImageSyncStatus = NonNullable<ImageEntry['status']>
 
 function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return null
@@ -58,6 +76,47 @@ function formatTime(iso?: string) {
   })
 }
 
+function getImageSyncStatus(entry: ImageEntry): ImageSyncStatus {
+  if (entry.status) return entry.status
+  return entry.synced ? 'synced' : 'pending'
+}
+
+function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
+  const status = getImageSyncStatus(entry)
+  const title = status === 'failed' && entry.syncError ? entry.syncError : undefined
+
+  switch (status) {
+    case 'syncing':
+      return (
+        <Badge variant="default" className="bg-blue-600 text-white dark:bg-blue-500">
+          <Loader2 className="animate-spin" />
+          syncing
+        </Badge>
+      )
+    case 'synced':
+      return (
+        <Badge variant="success">
+          <CheckCircle2 />
+          synced
+        </Badge>
+      )
+    case 'failed':
+      return (
+        <Badge variant="destructive" title={title}>
+          <CircleAlert />
+          failed
+        </Badge>
+      )
+    default:
+      return (
+        <Badge variant="secondary">
+          <Circle />
+          pending
+        </Badge>
+      )
+  }
+}
+
 export function MirrorsPage({ config, setConfig }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
@@ -72,6 +131,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
+  const [syncingNow, setSyncingNow] = useState(false)
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -168,11 +228,26 @@ export function MirrorsPage({ config, setConfig }: Props) {
 
     const now = new Date().toISOString()
     if (editIndex !== null) {
+      const original = config.images[editIndex]
+      const syncChanged =
+        original.source !== form.source.trim() ||
+        original.target !== finalTarget ||
+        original.profile !== form.profile
+
       setConfig((c) => ({
         ...c,
         images: c.images.map((img, i) =>
           i === editIndex
-            ? { ...img, source: form.source.trim(), target: finalTarget, profile: form.profile, notes: form.notes.trim() || undefined }
+            ? {
+                ...img,
+                source: form.source.trim(),
+                target: finalTarget,
+                profile: form.profile,
+                notes: form.notes.trim() || undefined,
+                ...(syncChanged
+                  ? { synced: undefined, status: 'pending' as const, syncedAt: undefined, syncError: undefined }
+                  : {}),
+              }
             : img
         ),
       }))
@@ -183,6 +258,7 @@ export function MirrorsPage({ config, setConfig }: Props) {
         target: finalTarget,
         profile: form.profile,
         enabled: true,
+        status: 'pending',
         createdAt: now,
         notes: form.notes.trim() || undefined,
       }
@@ -211,6 +287,34 @@ export function MirrorsPage({ config, setConfig }: Props) {
     }))
   }
 
+  async function handleTriggerSync() {
+    setSyncingNow(true)
+    try {
+      const result = await triggerSync()
+      if (!result.ok || !result.count) {
+        throw new Error(result.message || 'No images to sync')
+      }
+      setConfig((c) => ({
+        ...c,
+        images: c.images.map((img) => {
+          const status = getImageSyncStatus(img)
+          if (!img.enabled || status === 'synced' || status === 'syncing') return img
+          return {
+            ...img,
+            status: 'syncing',
+            syncError: undefined,
+          }
+        }),
+      }))
+      toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'}`)
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Failed to trigger sync'
+      toast(message, 'error')
+    } finally {
+      setSyncingNow(false)
+    }
+  }
+
   const effectiveTarget = form.targetTouched && form.target.trim()
     ? form.target
     : form.source.trim() ? deriveTarget(form.source) : ''
@@ -225,9 +329,15 @@ export function MirrorsPage({ config, setConfig }: Props) {
               Manage source → target image mirror mappings.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={startCreate} disabled={formOpen}>
-            <Plus /> Add Mirror
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={handleTriggerSync} disabled={syncingNow}>
+              {syncingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+              Sync
+            </Button>
+            <Button size="sm" onClick={startCreate} disabled={formOpen}>
+              <Plus /> Add Mirror
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -337,13 +447,12 @@ export function MirrorsPage({ config, setConfig }: Props) {
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
                           <TableCell className="py-2">
-                            {entry.synced ? (
-                              <Badge variant="success" className="text-[10px] px-1.5 py-0">synced</Badge>
-                            ) : entry.enabled ? (
-                              <Badge variant="warning" className="text-[10px] px-1.5 py-0">pending</Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0">off</Badge>
-                            )}
+                            <div className="flex flex-wrap items-center gap-1">
+                              <SyncStatusBadge entry={entry} />
+                              {!entry.enabled ? (
+                                <Badge variant="outline">off</Badge>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell className="py-2 overflow-hidden">
                             <span className="block truncate font-mono text-xs" title={entry.source}>
