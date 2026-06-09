@@ -9,7 +9,7 @@ jobs:
     name: Sync images from Web UI
     runs-on: ubuntu-latest
     env:
-      WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL }}
+      WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL != '' && secrets.WEB_API_BASE_URL || 'https://mirrotpilot.20220625.xyz' }}
       SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
       DEST_REGISTRY_USER: ${{ secrets.DEST_REGISTRY_USER != '' && secrets.DEST_REGISTRY_USER || secrets.ALIYUN_REGISTRY_USER }}
       DEST_REGISTRY_PASSWORD: ${{ secrets.DEST_REGISTRY_PASSWORD != '' && secrets.DEST_REGISTRY_PASSWORD || secrets.ALIYUN_REGISTRY_PASSWORD }}

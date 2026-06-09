@@ -68,8 +68,8 @@ MirrorPilot uses **GitHub OAuth** for authentication:
 2. Click **"New OAuth App"**
 3. Fill in:
    - **Application name**: `MirrorPilot` (or any name)
-   - **Homepage URL**: `https://your-domain.pages.dev`
-   - **Authorization callback URL**: `https://your-domain.pages.dev/api/auth/callback`
+   - **Homepage URL**: `https://mirrotpilot.20220625.xyz`
+   - **Authorization callback URL**: `https://mirrotpilot.20220625.xyz/api/auth/callback`
 4. Click **"Register application"**
 5. Copy the **Client ID**
 6. Click **"Generate a new client secret"** and copy the **Client Secret**
@@ -106,7 +106,7 @@ If you want the "Sync" button in the Web UI to trigger GitHub Actions:
 
 | Secret | Description |
 |--------|-------------|
-| `WEB_API_BASE_URL` | Your Pages URL (e.g. `https://mirrorpilot-web.pages.dev`) |
+| `WEB_API_BASE_URL` | Your production URL (set to `https://mirrotpilot.20220625.xyz`) |
 | `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
 | `DEST_REGISTRY_USER` | Destination registry username |
 | `DEST_REGISTRY_PASSWORD` | Destination registry password |
@@ -278,6 +278,11 @@ pnpm run deploy   # pnpm build && wrangler pages deploy
 2. **Configure secrets** as described in the [Authentication](#authentication) section above.
 
 3. **Create GitHub OAuth App** with the correct callback URL for your deployment.
+
+4. **Bind custom domain** `mirrotpilot.20220625.xyz` in Cloudflare Pages:
+   - Pages project → **Custom domains** → **Set up a custom domain**
+   - Add `mirrotpilot.20220625.xyz`
+   - Ensure DNS record is proxied by Cloudflare and status becomes **Active**
 
 ## Project layout
 
