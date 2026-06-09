@@ -12,9 +12,9 @@ import {
   Search,
   RefreshCw,
   Loader2,
-  Circle,
   CircleAlert,
   CheckCircle2,
+  Clock3,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -42,6 +42,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from '@/components/Toaster'
 import { buildFullTarget, deriveTarget, validateImageReference } from '@/lib/image'
 import type { ImageEntry, MirrorConfig } from '@/lib/types'
+import { searchMirrors } from '@/lib/cloudflare'
 
 interface Props {
   config: MirrorConfig
@@ -60,6 +61,7 @@ interface FormState {
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 type ImageSyncStatus = NonNullable<ImageEntry['status']>
+const PAGE_SIZE = 20
 
 function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return null
@@ -110,8 +112,8 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
       )
     default:
       return (
-        <Badge variant="secondary">
-          <Circle />
+        <Badge variant="pending" className="font-semibold">
+          <Clock3 />
           pending
         </Badge>
       )
@@ -131,6 +133,13 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [page, setPage] = useState(1)
+  const [searchResult, setSearchResult] = useState<{
+    total: number
+    items: ImageEntry[]
+    loading: boolean
+    error: string | null
+  }>({ total: 0, items: [], loading: false, error: null })
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
   const [latestRun, setLatestRun] = useState<{ status: string; conclusion: string | null; url: string } | null>(null)
@@ -151,26 +160,17 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen])
 
-  const filteredAndSortedImages = useMemo(() => {
-    const q = searchQuery.toLowerCase().trim()
+  const sortedImages = useMemo(() => {
     const indexed = config.images.map((img, i) => ({ img, i }))
 
-    const filtered = q
-      ? indexed.filter(({ img }) => {
-          const registry = config.profiles[img.profile]?.registry ?? ''
-          const fullTarget = buildFullTarget(registry, img.target)
-          return (
-            img.source.toLowerCase().includes(q) ||
-            fullTarget.toLowerCase().includes(q) ||
-            img.target.toLowerCase().includes(q) ||
-            img.profile.toLowerCase().includes(q) ||
-            (img.notes?.toLowerCase().includes(q) ?? false)
-          )
-        })
-      : indexed
-
-    if (!sortField) return filtered
-    filtered.sort((a, b) => {
+    if (!sortField) {
+      return [...indexed].sort((a, b) => {
+        const enabledCmp = (b.img.enabled ? 1 : 0) - (a.img.enabled ? 1 : 0)
+        if (enabledCmp !== 0) return enabledCmp
+        return a.i - b.i
+      })
+    }
+    indexed.sort((a, b) => {
       let cmp: number
       if (sortField === 'enabled') {
         cmp = (a.img.enabled ? 1 : 0) - (b.img.enabled ? 1 : 0)
@@ -181,8 +181,78 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       }
       return sortDir === 'asc' ? cmp : -cmp
     })
-    return filtered
-  }, [config.images, config.profiles, searchQuery, sortField, sortDir])
+    return indexed
+  }, [config.images, sortField, sortDir])
+
+  useEffect(() => {
+    setPage(1)
+  }, [searchQuery, sortField, sortDir])
+
+  const useServerSearch = searchQuery.trim().length > 0
+
+  useEffect(() => {
+    if (!useServerSearch) {
+      setSearchResult((prev) => ({ ...prev, error: null, loading: false }))
+      return
+    }
+
+    const controller = new AbortController()
+    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+    searchMirrors({
+      q: searchQuery.trim(),
+      page,
+      pageSize: PAGE_SIZE,
+      sortField: sortField ?? undefined,
+      sortDir,
+    })
+      .then((res) => {
+        if (controller.signal.aborted) return
+        setSearchResult({
+          total: res.total,
+          items: res.items,
+          loading: false,
+          error: null,
+        })
+      })
+      .catch((e: unknown) => {
+        if (controller.signal.aborted) return
+        setSearchResult((prev) => ({
+          ...prev,
+          loading: false,
+          error: e instanceof Error ? e.message : String(e),
+        }))
+      })
+
+    return () => controller.abort()
+  }, [useServerSearch, searchQuery, page, sortField, sortDir])
+
+  const localTotalPages = Math.max(1, Math.ceil(sortedImages.length / PAGE_SIZE))
+  const remoteTotalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
+  const totalPages = useServerSearch ? remoteTotalPages : localTotalPages
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
+  const pagedLocalImages = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE
+    return sortedImages.slice(start, start + PAGE_SIZE)
+  }, [sortedImages, page])
+
+  const visibleRows = useMemo(() => {
+    if (!useServerSearch) return pagedLocalImages
+
+    return searchResult.items.map((entry) => {
+      const originalIndex = config.images.findIndex((img) =>
+        img.source === entry.source &&
+        img.target === entry.target &&
+        img.profile === entry.profile
+      )
+      return { img: entry, i: originalIndex }
+    }).filter((row) => row.i >= 0)
+  }, [useServerSearch, pagedLocalImages, searchResult.items, config.images])
 
   function toggleSort(field: SortField) {
     if (sortField === field) {
@@ -193,11 +263,30 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     }
   }
 
-  function copyTarget(fullTarget: string, index: number) {
-    navigator.clipboard.writeText(fullTarget).then(() => {
+  async function copyTarget(fullTarget: string, index: number) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(fullTarget)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = fullTarget
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const ok = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        if (!ok) {
+          throw new Error('copy failed')
+        }
+      }
       setCopiedIndex(index)
       setTimeout(() => setCopiedIndex(null), 1500)
-    })
+      toast('Target copied')
+    } catch {
+      toast('Copy failed. Please copy manually.', 'error')
+    }
   }
 
   function startCreate() {
@@ -458,21 +547,26 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                 />
               </div>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                {filteredAndSortedImages.length}/{config.images.length}
+                {(useServerSearch ? searchResult.total : sortedImages.length)}/{config.images.length}
               </span>
             </div>
 
-            {filteredAndSortedImages.length === 0 ? (
+            {useServerSearch && searchResult.loading ? (
+              <p className="text-muted-foreground py-8 text-center text-sm">
+                Searching...
+              </p>
+            ) : (useServerSearch ? searchResult.total : sortedImages.length) === 0 ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
                 No entries match "{searchQuery}".
               </p>
             ) : (
-              <div className="overflow-x-auto -mx-6 px-6">
-                <Table className="table-fixed w-full min-w-[640px]">
+              <>
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <Table className="table-fixed w-full min-w-[640px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead
-                        className="w-[88px] cursor-pointer select-none"
+                        className="w-[96px] cursor-pointer select-none"
                         onClick={() => toggleSort('enabled')}
                       >
                         Status <SortIndicator active={sortField === 'enabled'} dir={sortDir} />
@@ -490,7 +584,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredAndSortedImages.map(({ img: entry, i: originalIndex }) => {
+                    {visibleRows.map(({ img: entry, i: originalIndex }) => {
                       const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
                       return (
                         <TableRow
@@ -498,11 +592,8 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
                           <TableCell className="py-2 pr-3">
-                            <div className="flex flex-wrap items-center gap-1">
+                            <div className="flex flex-nowrap items-center">
                               <SyncStatusBadge entry={entry} />
-                              {!entry.enabled ? (
-                                <Badge variant="outline">off</Badge>
-                              ) : null}
                             </div>
                           </TableCell>
                           <TableCell className="py-2 overflow-hidden">
@@ -553,8 +644,37 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                       )
                     })}
                   </TableBody>
-                </Table>
-              </div>
+                  </Table>
+                </div>
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-muted-foreground text-xs">
+                    Page {page}/{totalPages}
+                  </span>
+                  {searchResult.loading ? (
+                    <span className="text-muted-foreground text-xs">Searching...</span>
+                  ) : searchResult.error ? (
+                    <span className="text-destructive text-xs">{searchResult.error}</span>
+                  ) : null}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                    >
+                      Prev
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              </>
             )}
           </>
         )}

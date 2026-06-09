@@ -25,7 +25,8 @@ Browser
   │     └── /settings   — account info
   │
   └── Cloudflare Pages Functions (serverless edge workers)
-        ├── GET/PUT /api/config         — read/write MirrorConfig via D1
+        ├── GET/PUT /api/mirrors        — read/write MirrorConfig via D1
+        ├── GET     /api/mirrors/search — server-side search + pagination
         ├── POST /api/detect            — probes source existence, mirror sync status, auth
         ├── POST /api/check-registry    — pings registry reachability and validates credentials
         ├── GET  /api/auth/github       — redirects to GitHub OAuth
@@ -343,7 +344,9 @@ web/
 │   ├── _env.ts                 # Shared Env interface (DB + secrets)
 │   ├── _middleware.ts          # Auth middleware (session validation)
 │   └── api/
-│       ├── config.ts           # GET/PUT /api/config — D1 read/write
+│       ├── mirrors/index.ts    # GET/PUT /api/mirrors — D1 read/write
+│       ├── mirrors/search.ts   # GET /api/mirrors/search — server-side search
+│       ├── config.ts           # legacy alias to mirrors/index
 │       ├── detect.ts           # POST /api/detect
 │       ├── check-registry.ts   # POST /api/check-registry
 │       ├── _registry.ts        # Docker Registry v2 client (token auth)
@@ -377,7 +380,7 @@ web/
 │   │   ├── useLocalStorage.ts      # Generic JSON-persisted state
 │   │   └── useCloudflareStorage.ts # D1 load/save with localStorage cache
 │   ├── lib/
-│   │   ├── cloudflare.ts   # /api/config fetch wrappers
+│   │   ├── cloudflare.ts   # /api/mirrors + /api/mirrors/search fetch wrappers
 │   │   ├── types.ts        # Shared TypeScript types
 │   │   ├── image.ts        # Image ref parsing/validation
 │   │   └── api.ts          # /api/detect + /api/sync clients
