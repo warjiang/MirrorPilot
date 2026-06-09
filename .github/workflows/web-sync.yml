@@ -11,24 +11,32 @@ jobs:
     env:
       WEB_API_BASE_URL: ${{ secrets.WEB_API_BASE_URL != '' && secrets.WEB_API_BASE_URL || 'https://mirrotpilot.20220625.xyz' }}
       SYNC_SECRET: ${{ secrets.SYNC_SECRET }}
-      DEST_REGISTRY_USER: ${{ secrets.DEST_REGISTRY_USER != '' && secrets.DEST_REGISTRY_USER || secrets.ALIYUN_REGISTRY_USER }}
-      DEST_REGISTRY_PASSWORD: ${{ secrets.DEST_REGISTRY_PASSWORD != '' && secrets.DEST_REGISTRY_PASSWORD || secrets.ALIYUN_REGISTRY_PASSWORD }}
     steps:
       - name: Fetch pending images
         id: fetch
         run: |
           USER_ID="${{ github.event.client_payload.user_id }}"
-          curl -sf \
+          echo "Fetching pending images for user_id=$USER_ID"
+          HTTP_CODE=$(curl -s -o /tmp/pending.json -w "%{http_code}" \
             -H "Authorization: Bearer $SYNC_SECRET" \
-            "$WEB_API_BASE_URL/api/sync/pending?user_id=$USER_ID" \
-            -o /tmp/pending.json
+            "$WEB_API_BASE_URL/api/sync/pending?user_id=$USER_ID")
+          echo "HTTP response: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Failed to fetch pending images (HTTP $HTTP_CODE)"
+            cat /tmp/pending.json
+            exit 1
+          fi
           echo "Fetched images:"
           cat /tmp/pending.json | jq .
+          IMAGE_COUNT=$(jq '.images | length' /tmp/pending.json)
+          echo "image_count=$IMAGE_COUNT" >> $GITHUB_OUTPUT
 
       - name: Set up skopeo
+        if: steps.fetch.outputs.image_count != '0'
         uses: warjiang/setup-skopeo@v0.1.3
 
       - name: Sync images
+        if: steps.fetch.outputs.image_count != '0'
         run: |
           echo '[]' > /tmp/results.json
 
@@ -37,13 +45,20 @@ jobs:
             SOURCE=$(echo "$img" | jq -r '.source')
             TARGET=$(echo "$img" | jq -r '.target')
             REGISTRY=$(echo "$img" | jq -r '.registry // empty')
+            USERNAME=$(echo "$img" | jq -r '.username_env // empty')
+            PASSWORD=$(echo "$img" | jq -r '.password_env // empty')
 
             FULL_TARGET="${REGISTRY}/${TARGET}"
 
             echo "::group::Syncing $SOURCE -> $FULL_TARGET"
 
+            DEST_CREDS_ARG=""
+            if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
+              DEST_CREDS_ARG="--dest-creds ${USERNAME}:${PASSWORD}"
+            fi
+
             if skopeo copy --all \
-              --dest-creds "${DEST_REGISTRY_USER}:${DEST_REGISTRY_PASSWORD}" \
+              $DEST_CREDS_ARG \
               "docker://${SOURCE}" \
               "docker://${FULL_TARGET}"; then
               echo "✅ Success"
@@ -63,9 +78,8 @@ jobs:
           cat /tmp/results.json | jq .
 
       - name: Report results
-        if: always()
+        if: always() && steps.fetch.outputs.image_count != '0'
         run: |
-          # If results file doesn't exist or is empty, mark all as failed
           if [ ! -s /tmp/results.json ] || [ "$(cat /tmp/results.json)" = "[]" ]; then
             IMAGE_IDS='${{ toJSON(github.event.client_payload.image_ids) }}'
             echo "$IMAGE_IDS" | jq '[.[] | {image_id: ., success: false, error: "sync step failed or produced no results"}]' > /tmp/results.json
