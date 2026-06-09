@@ -12,6 +12,8 @@ export interface ImageEntry {
   profile: string
   enabled: boolean
   synced?: boolean
+  status?: 'pending' | 'syncing' | 'synced' | 'failed'
+  syncError?: string
   createdAt?: string
   syncedAt?: string
   notes?: string

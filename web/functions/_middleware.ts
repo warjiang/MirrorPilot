@@ -8,6 +8,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return next()
   }
 
+  // Pass through sync callback endpoints (they use SYNC_SECRET auth)
+  if (url.pathname === '/api/sync/pending' || url.pathname === '/api/sync/complete') {
+    return next()
+  }
+
   if (url.pathname.startsWith('/api/')) {
     // Dev bypass: skip auth when DEV_USER_EMAIL is configured
     if (env.DEV_USER_EMAIL) {

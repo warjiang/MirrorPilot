@@ -15,6 +15,16 @@ function getEmail(request: Request, env: Env): string | null {
   return null
 }
 
+async function getUserIdFromSession(request: Request, db: D1Database): Promise<number | null> {
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(/mp_session=([^;]+)/)
+  if (!match) return null
+  const session = await db.prepare(
+    "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')"
+  ).bind(match[1]).first<{ user_id: number }>()
+  return session?.user_id ?? null
+}
+
 async function getOrCreateUser(db: D1Database, email: string): Promise<number> {
   await db
     .prepare("INSERT OR IGNORE INTO users (email, created_at) VALUES (?, datetime('now'))")
@@ -40,6 +50,8 @@ interface ImageRow {
   profile: string
   enabled: number
   synced: number
+  status: string | null
+  sync_error: string | null
   notes: string
   created_at: string
   synced_at: string | null
@@ -52,7 +64,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
       .bind(userId)
       .all<ProfileRow>(),
     db
-      .prepare('SELECT source, target, profile, enabled, synced, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
+      .prepare('SELECT source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
       .bind(userId)
       .all<ImageRow>(),
   ])
@@ -72,6 +84,10 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
     profile: row.profile,
     enabled: row.enabled === 1,
     synced: row.synced === 1 ? true : undefined,
+    status: row.status === 'pending' || row.status === 'syncing' || row.status === 'synced' || row.status === 'failed'
+      ? row.status
+      : undefined,
+    syncError: row.sync_error || undefined,
     notes: row.notes || undefined,
     createdAt: row.created_at,
     syncedAt: row.synced_at ?? undefined,
@@ -113,7 +129,7 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
     statements.push(
       db
         .prepare(
-          'INSERT INTO images (user_id, source, target, profile, enabled, synced, notes, created_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO images (user_id, source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )
         .bind(
           userId,
@@ -122,6 +138,8 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
           img.profile ?? 'default',
           img.enabled !== false ? 1 : 0,
           img.synced ? 1 : 0,
+          img.status ?? (img.synced ? 'synced' : 'pending'),
+          img.syncError ?? '',
           img.notes ?? '',
           img.createdAt ?? new Date().toISOString(),
           img.syncedAt ?? null,
@@ -134,6 +152,11 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  // Try session-based auth first, then legacy methods
+  const sessionUserId = await getUserIdFromSession(context.request, context.env.DB)
+  if (sessionUserId) {
+    return handleGet(context.env.DB, sessionUserId)
+  }
   const email = getEmail(context.request, context.env)
   if (!email) return json({ error: 'unauthenticated' }, 401)
   const userId = await getOrCreateUser(context.env.DB, email)
@@ -141,6 +164,10 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 }
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
+  const sessionUserId = await getUserIdFromSession(context.request, context.env.DB)
+  if (sessionUserId) {
+    return handlePut(context.env.DB, sessionUserId, context.request)
+  }
   const email = getEmail(context.request, context.env)
   if (!email) return json({ error: 'unauthenticated' }, 401)
   const userId = await getOrCreateUser(context.env.DB, email)
