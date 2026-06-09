@@ -119,6 +119,9 @@ Also add to Cloudflare Pages environment variables:
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
 | `SYNC_SECRET` | Same shared secret as configured in GitHub Actions |
 
+> Note: `GITHUB_REPO` is the GitHub repository identifier (for example `warjiang/MirrorPilot`), not the Cloudflare Pages project name.  
+> Cloudflare Pages project name for deploy is `mirrorpilot`.
+
 #### Rotate `SYNC_SECRET` (recommended periodically)
 
 Generate a new random secret and update both GitHub Actions and Cloudflare Pages:
