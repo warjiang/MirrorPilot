@@ -5,6 +5,7 @@ export interface User {
   email: string
   name: string
   avatar_url: string
+  is_admin: number
 }
 
 interface AuthState {

@@ -118,6 +118,7 @@ Also add to Cloudflare Pages environment variables:
 | `GITHUB_TOKEN` | A GitHub PAT with `repo` scope (for triggering `repository_dispatch`) |
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
 | `SYNC_SECRET` | Same shared secret as configured in GitHub Actions |
+| `ADMIN_EMAIL` | (Optional) GitHub email address of the user who should have admin privileges |
 
 > Note: `GITHUB_REPO` is the GitHub repository identifier (for example `warjiang/MirrorPilot`), not the Cloudflare Pages project name.  
 > Cloudflare Pages project name for deploy is `mirrorpilot`.
@@ -221,6 +222,7 @@ GITHUB_CLIENT_SECRET=your-client-secret
 GITHUB_TOKEN=your-github-pat
 GITHUB_REPO=warjiang/MirrorPilot
 SYNC_SECRET=your-random-secret
+ADMIN_EMAIL=dev@localhost
 EOF
 ```
 
@@ -312,7 +314,8 @@ web/
 ├── migrations/
 │   ├── 0001_init.sql           # D1 schema: users, profiles, images
 │   ├── 0002_sessions.sql       # Sessions table + user OAuth fields
-│   └── 0003_sync_status.sql    # Sync status columns on images
+│   ├── 0003_sync_status.sql    # Sync status columns on images
+│   └── 0004_admin.sql          # Admin role support
 ├── functions/
 │   ├── _env.ts                 # Shared Env interface (DB + secrets)
 │   ├── _middleware.ts          # Auth middleware (session validation)

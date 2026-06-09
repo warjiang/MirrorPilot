@@ -69,15 +69,20 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
     .bind(ghUser.id)
     .first<{ id: number }>()
 
+  // Determine if user should be admin
+  const isAdmin = env.ADMIN_EMAIL ? 
+    email?.toLowerCase() === env.ADMIN_EMAIL.toLowerCase() : 
+    false
+
   let userId: number
   if (existingUser) {
-    await env.DB.prepare('UPDATE users SET email = ?, name = ?, avatar_url = ? WHERE id = ?')
-      .bind(email, ghUser.login, ghUser.avatar_url, existingUser.id)
+    await env.DB.prepare('UPDATE users SET email = ?, name = ?, avatar_url = ?, is_admin = ? WHERE id = ?')
+      .bind(email, ghUser.login, ghUser.avatar_url, isAdmin ? 1 : 0, existingUser.id)
       .run()
     userId = existingUser.id
   } else {
-    const result = await env.DB.prepare('INSERT INTO users (email, github_id, name, avatar_url) VALUES (?, ?, ?, ?)')
-      .bind(email, ghUser.id, ghUser.login, ghUser.avatar_url)
+    const result = await env.DB.prepare('INSERT INTO users (email, github_id, name, avatar_url, is_admin) VALUES (?, ?, ?, ?, ?)')
+      .bind(email, ghUser.id, ghUser.login, ghUser.avatar_url, isAdmin ? 1 : 0)
       .run()
     userId = result.meta.last_row_id as number
   }
