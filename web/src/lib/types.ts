@@ -2,7 +2,8 @@
 
 export interface RegistryProfile {
   registry: string
-  credentialRegistry?: string
+  username?: string
+  password?: string
 }
 
 export interface ImageEntry {
@@ -32,7 +33,6 @@ export function emptyConfig(): MirrorConfig {
     profiles: {
       [DEFAULT_PROFILE]: {
         registry: '',
-        credentialRegistry: '',
       },
     },
     images: [],
