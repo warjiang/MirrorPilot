@@ -46,6 +46,7 @@ import type { ImageEntry, MirrorConfig } from '@/lib/types'
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
+  reloadConfig: () => Promise<void>
 }
 
 interface FormState {
@@ -117,7 +118,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig }: Props) {
+export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
   const [editIndex, setEditIndex] = useState<number | null>(null)
@@ -330,6 +331,8 @@ export function MirrorsPage({ config, setConfig }: Props) {
           if (run) {
             setLatestRun(run)
             if (run.status === 'completed') {
+              // Reload config from backend to get updated image statuses
+              await reloadConfig()
               if (run.conclusion === 'success') {
                 toast('Sync completed successfully!', 'success')
               } else {

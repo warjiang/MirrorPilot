@@ -79,7 +79,6 @@ export function useCloudflareStorage() {
     try {
       const fetched = await loadConfig()
       setConfigState(fetched)
-      toast('Pulled latest config from Cloudflare')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       setError(msg)
