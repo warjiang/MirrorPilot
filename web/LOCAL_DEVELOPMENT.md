@@ -108,10 +108,38 @@ For detailed OAuth troubleshooting (e.g., redirect_uri mismatch), see [OAUTH_TRO
 3. Wait 2-3 seconds for environment variables to reload
 4. Hard refresh browser (Cmd+Shift+R on Mac, Ctrl+Shift+R on Windows)
 
-### D1 Migrations Failed
+### D1 Migration Errors
+
+**Problem**: "table users has no column named is_admin" or similar migration-related errors
+
+**Solution**:
+
+Apply pending migrations:
 
 ```bash
+cd web
 pnpm wrangler d1 migrations apply mirrorpilot --local
+```
+
+This will apply any unapplied migrations to your local database.
+
+If the above doesn't work, you may need to reset your local database:
+
+```bash
+# Delete the local D1 database
+rm -rf .wrangler/state/v3/d1/mirrorpilot.sqlite3
+
+# Recreate and apply all migrations
+pnpm wrangler d1 create mirrorpilot --local
+pnpm wrangler d1 migrations apply mirrorpilot --local
+```
+
+> ⚠️ **Warning**: This will delete all local data. Use only for development.
+
+After resetting, restart Wrangler:
+
+```bash
+pnpm dev:cf
 ```
 
 ### CORS Issues in Local Dev
