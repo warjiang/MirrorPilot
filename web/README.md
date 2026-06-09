@@ -119,6 +119,24 @@ Also add to Cloudflare Pages environment variables:
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
 | `SYNC_SECRET` | Same shared secret as configured in GitHub Actions |
 
+#### Rotate `SYNC_SECRET` (recommended periodically)
+
+Generate a new random secret and update both GitHub Actions and Cloudflare Pages:
+
+```bash
+# 1) Generate a strong random secret (macOS/Linux)
+NEW_SYNC_SECRET="$(openssl rand -base64 48 | tr -d '\n')"
+echo "$NEW_SYNC_SECRET"
+
+# 2) Update GitHub Actions secret (repo-level)
+gh secret set SYNC_SECRET --repo warjiang/MirrorPilot --body "$NEW_SYNC_SECRET"
+
+# 3) Update Cloudflare Pages secret (production + preview)
+cd web
+echo "$NEW_SYNC_SECRET" | npx wrangler pages secret put SYNC_SECRET
+echo "$NEW_SYNC_SECRET" | npx wrangler pages secret put SYNC_SECRET --env preview
+```
+
 ## Secret & credential storage
 
 | Secret | Where stored | Lifetime |
