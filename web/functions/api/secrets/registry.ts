@@ -23,6 +23,13 @@ async function getUserIdFromSession(request: Request, db: D1Database): Promise<n
   return session?.user_id ?? null
 }
 
+async function getUserIdFromDevEmail(db: D1Database, devEmail: string): Promise<number | null> {
+  const user = await db.prepare(
+    'SELECT id FROM users WHERE email = ?'
+  ).bind(devEmail.toLowerCase().trim()).first<{ id: number }>()
+  return user?.id ?? null
+}
+
 async function handleGet(db: D1Database, userId: number): Promise<Response> {
   const result = await db
     .prepare('SELECT registry, dest_user, dest_pass FROM registry_secrets WHERE user_id = ? ORDER BY registry ASC')
@@ -79,7 +86,13 @@ async function handleDelete(db: D1Database, userId: number, registry: string): P
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const userId = await getUserIdFromSession(context.request, context.env.DB)
+  let userId = await getUserIdFromSession(context.request, context.env.DB)
+  
+  // Dev bypass: allow authentication via DEV_USER_EMAIL for local development
+  if (!userId && context.env.DEV_USER_EMAIL) {
+    userId = await getUserIdFromDevEmail(context.env.DB, context.env.DEV_USER_EMAIL)
+  }
+  
   if (!userId) {
     return json({ error: 'unauthenticated' }, 401)
   }
@@ -87,7 +100,13 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const userId = await getUserIdFromSession(context.request, context.env.DB)
+  let userId = await getUserIdFromSession(context.request, context.env.DB)
+  
+  // Dev bypass: allow authentication via DEV_USER_EMAIL for local development
+  if (!userId && context.env.DEV_USER_EMAIL) {
+    userId = await getUserIdFromDevEmail(context.env.DB, context.env.DEV_USER_EMAIL)
+  }
+  
   if (!userId) {
     return json({ error: 'unauthenticated' }, 401)
   }
@@ -95,7 +114,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 }
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
-  const userId = await getUserIdFromSession(context.request, context.env.DB)
+  let userId = await getUserIdFromSession(context.request, context.env.DB)
+  
+  // Dev bypass: allow authentication via DEV_USER_EMAIL for local development
+  if (!userId && context.env.DEV_USER_EMAIL) {
+    userId = await getUserIdFromDevEmail(context.env.DB, context.env.DEV_USER_EMAIL)
+  }
+  
   if (!userId) {
     return json({ error: 'unauthenticated' }, 401)
   }
