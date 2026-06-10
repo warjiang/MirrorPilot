@@ -58,6 +58,22 @@ interface ImageRow {
   synced_at: string | null
 }
 
+interface ExistingImageRow {
+  id: number
+  source: string
+  target: string
+  profile: string
+  created_at: string
+}
+
+function imageMatchKey(source: string, target: string, profile: string, createdAt?: string | null): string {
+  return `${source}\u0000${target}\u0000${profile}\u0000${createdAt ?? ''}`
+}
+
+function imageLooseMatchKey(source: string, target: string, profile: string): string {
+  return `${source}\u0000${target}\u0000${profile}`
+}
+
 async function handleGet(db: D1Database, userId: number): Promise<Response> {
   const [profileResult, imageResult] = await Promise.all([
     db
@@ -114,11 +130,23 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
   const profiles = body.profiles ?? {}
   const images = body.images ?? []
   const existingImageRows = await db
-    .prepare('SELECT id FROM images WHERE user_id = ?')
+    .prepare('SELECT id, source, target, profile, created_at FROM images WHERE user_id = ?')
     .bind(userId)
-    .all<{ id: number }>()
+    .all<ExistingImageRow>()
   const existingImageIds = new Set(existingImageRows.results.map((row) => row.id))
   const keptImageIds = new Set<number>()
+  const exactMatchIds = new Map<string, number[]>()
+  const looseMatchIds = new Map<string, number[]>()
+  for (const row of existingImageRows.results) {
+    const exactKey = imageMatchKey(row.source, row.target, row.profile, row.created_at)
+    const looseKey = imageLooseMatchKey(row.source, row.target, row.profile)
+    const exactList = exactMatchIds.get(exactKey)
+    if (exactList) exactList.push(row.id)
+    else exactMatchIds.set(exactKey, [row.id])
+    const looseList = looseMatchIds.get(looseKey)
+    if (looseList) looseList.push(row.id)
+    else looseMatchIds.set(looseKey, [row.id])
+  }
 
   const statements: D1PreparedStatement[] = [
     db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
@@ -133,11 +161,36 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
   }
 
   for (const img of images) {
-    const incomingId = typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0
+    let matchedId = typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0
       ? Math.trunc(img.id)
       : null
-    if (incomingId !== null && existingImageIds.has(incomingId)) {
-      keptImageIds.add(incomingId)
+    if (matchedId !== null && !existingImageIds.has(matchedId)) {
+      matchedId = null
+    }
+    if (matchedId === null) {
+      const exactKey = imageMatchKey(img.source, img.target, img.profile ?? 'default', img.createdAt)
+      const looseKey = imageLooseMatchKey(img.source, img.target, img.profile ?? 'default')
+      const exactList = exactMatchIds.get(exactKey)
+      while (exactList?.length) {
+        const candidate = exactList.shift()!
+        if (!keptImageIds.has(candidate)) {
+          matchedId = candidate
+          break
+        }
+      }
+      if (matchedId === null) {
+        const looseList = looseMatchIds.get(looseKey)
+        while (looseList?.length) {
+          const candidate = looseList.shift()!
+          if (!keptImageIds.has(candidate)) {
+            matchedId = candidate
+            break
+          }
+        }
+      }
+    }
+    if (matchedId !== null && existingImageIds.has(matchedId)) {
+      keptImageIds.add(matchedId)
       statements.push(
         db
           .prepare(
@@ -150,7 +203,7 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
             img.enabled !== false ? 1 : 0,
             img.notes ?? '',
             userId,
-            incomingId,
+            matchedId,
           )
       )
       continue
