@@ -195,12 +195,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
       })
 
     return () => controller.abort()
-  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce])
-
-  useEffect(() => {
-    if (!lastSavedAt) return
-    setListNonce((n) => n + 1)
-  }, [lastSavedAt])
+  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce, lastSavedAt])
 
   const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
