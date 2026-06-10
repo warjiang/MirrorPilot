@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
   Pencil,
@@ -15,6 +15,8 @@ import {
   CircleAlert,
   CheckCircle2,
   Clock3,
+  Pin,
+  PinOff,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -134,6 +136,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [listNonce, setListNonce] = useState(0)
   const [searchResult, setSearchResult] = useState<{
     total: number
     items: ImageEntry[]
@@ -142,7 +145,9 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   }>({ total: 0, items: [], loading: true, error: null })
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
-  const [latestRun, setLatestRun] = useState<{ status: string; conclusion: string | null; url: string } | null>(null)
+  const [refreshingNow, setRefreshingNow] = useState(false)
+  const [latestRun, setLatestRun] = useState<{ id: number; status: string; conclusion: string | null; url: string } | null>(null)
+  const handledCompletedRunIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -190,7 +195,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       })
 
     return () => controller.abort()
-  }, [trimmedSearchQuery, page, sortField, sortDir])
+  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce])
 
   const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -307,6 +312,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
             : img
         ),
       }))
+      setListNonce((n) => n + 1)
       toast('Mirror entry updated')
     } else {
       const entry: ImageEntry = {
@@ -314,11 +320,14 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
         target: finalTarget,
         profile: form.profile,
         enabled: true,
+        pinned: true,
         status: 'pending',
         createdAt: now,
         notes: form.notes.trim() || undefined,
       }
       setConfig((c) => ({ ...c, images: [...c.images, entry] }))
+      setPage(1)
+      setListNonce((n) => n + 1)
       toast(`Added ${form.source.trim()}`)
     }
     cancelForm()
@@ -332,6 +341,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     if (deleteTarget === null) return
     const entry = config.images[deleteTarget]
     setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== deleteTarget) }))
+    setListNonce((n) => n + 1)
     toast(`Removed ${entry.source}`)
     setDeleteTarget(null)
   }
@@ -341,7 +351,77 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       ...c,
       images: c.images.map((img, i) => (i === index ? { ...img, enabled: !img.enabled } : img)),
     }))
+    setListNonce((n) => n + 1)
   }
+
+  function togglePinned(index: number) {
+    setConfig((c) => ({
+      ...c,
+      images: c.images.map((img, i) => (i === index ? { ...img, pinned: !img.pinned } : img)),
+    }))
+    setListNonce((n) => n + 1)
+  }
+
+  const refreshSyncState = useCallback(async (opts?: { manual?: boolean; forceReload?: boolean; showCompleteToast?: boolean }) => {
+    const manual = opts?.manual === true
+    const forceReload = opts?.forceReload === true
+    const showCompleteToast = opts?.showCompleteToast !== false
+    if (manual) setRefreshingNow(true)
+    try {
+      const res = await fetch('/api/sync/status')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const data = await res.json() as {
+        runs: Array<{ id: number; status: string; conclusion: string | null; url: string }>
+      }
+      const run = data.runs[0]
+      let shouldReload = forceReload
+      if (run) {
+        setLatestRun(run)
+        if (run.status === 'completed' && handledCompletedRunIdRef.current !== run.id) {
+          handledCompletedRunIdRef.current = run.id
+          shouldReload = true
+          if (showCompleteToast) {
+            if (run.conclusion === 'success') toast('Sync completed successfully!', 'success')
+            else toast(`Sync finished with status: ${run.conclusion}`, 'error')
+          }
+        }
+      }
+
+      if (shouldReload) {
+        await reloadConfig()
+        setListNonce((n) => n + 1)
+      }
+      if (manual) toast('Refreshed')
+    } catch (e) {
+      if (manual) {
+        const message = e instanceof Error ? e.message : 'Refresh failed'
+        toast(message, 'error')
+      }
+    } finally {
+      if (manual) setRefreshingNow(false)
+    }
+  }, [reloadConfig])
+
+  const hasSyncingImages = useMemo(
+    () => config.images.some((img) => getImageSyncStatus(img) === 'syncing'),
+    [config.images]
+  )
+
+  useEffect(() => {
+    if (!hasSyncingImages && !syncingNow) return
+    let stopped = false
+    const tick = async () => {
+      if (stopped) return
+      await refreshSyncState({ showCompleteToast: true })
+    }
+    void tick()
+    const timer = window.setInterval(() => { void tick() }, 5000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [hasSyncingImages, syncingNow, refreshSyncState])
 
   async function handleTriggerSync() {
     setSyncingNow(true)
@@ -363,41 +443,12 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
         }),
       }))
       toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'}`)
-      // Start polling for workflow run status
-      pollSyncStatus()
+      void refreshSyncState({ showCompleteToast: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
       toast(message, 'error')
     } finally {
       setSyncingNow(false)
-    }
-  }
-
-  async function pollSyncStatus() {
-    // Wait a few seconds for the run to appear
-    await new Promise((r) => setTimeout(r, 3000))
-    for (let i = 0; i < 60; i++) {
-      try {
-        const res = await fetch('/api/sync/status')
-        if (res.ok) {
-          const data = await res.json() as { runs: Array<{ status: string; conclusion: string | null; url: string }> }
-          const run = data.runs[0]
-          if (run) {
-            setLatestRun(run)
-            if (run.status === 'completed') {
-              // Reload config from backend to get updated image statuses
-              await reloadConfig()
-              if (run.conclusion === 'success') {
-                toast('Sync completed successfully!', 'success')
-              } else {
-                toast(`Sync finished with status: ${run.conclusion}`, 'error')
-              }
-              return
-            }
-          }
-        }
-      } catch { /* ignore */ }
-      await new Promise((r) => setTimeout(r, 5000))
     }
   }
 
@@ -438,6 +489,15 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
             <Button size="sm" variant="outline" onClick={handleTriggerSync} disabled={syncingNow}>
               {syncingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
               Sync
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { void refreshSyncState({ manual: true, forceReload: true, showCompleteToast: false }) }}
+              disabled={refreshingNow}
+            >
+              {refreshingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+              Refresh
             </Button>
             <Button size="sm" onClick={startCreate} disabled={formOpen}>
               <Plus /> Add Mirror
@@ -550,7 +610,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                       >
                         Synced <SortIndicator active={sortField === 'syncedAt'} dir={sortDir} />
                       </TableHead>
-                      <TableHead className="w-[140px] text-right">Actions</TableHead>
+                      <TableHead className="w-[176px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -602,6 +662,21 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                                 {copiedIndex === originalIndex
                                   ? <Check className="size-3.5 text-green-600" />
                                   : <Copy className="size-3.5" />}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  togglePinned(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : (entry.pinned ? 'Unpin' : 'Pin')}
+                              >
+                                {entry.pinned
+                                  ? <PinOff className="size-3.5 text-amber-600" />
+                                  : <Pin className="size-3.5" />}
                               </Button>
                               <Button
                                 variant="ghost"

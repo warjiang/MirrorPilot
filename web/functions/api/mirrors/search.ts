@@ -43,6 +43,7 @@ interface ImageRow {
   target: string
   profile: string
   enabled: number
+  pinned: number
   synced: number
   status: string | null
   sync_error: string | null
@@ -76,7 +77,7 @@ function parseSortDir(raw: string | null): SortDir {
 
 function buildOrderBy(sortField: SortField | null, sortDir: SortDir): string {
   if (!sortField) {
-    return 'i.enabled DESC, i.rowid ASC'
+    return 'i.pinned DESC, i.enabled DESC, i.rowid DESC'
   }
 
   if (sortField === 'enabled') {
@@ -97,6 +98,7 @@ function mapRowToImage(row: ImageRow): ImageEntry {
     target: row.target,
     profile: row.profile,
     enabled: row.enabled === 1,
+    pinned: row.pinned === 1 ? true : undefined,
     synced: row.synced === 1 ? true : undefined,
     status: row.status === 'pending' || row.status === 'syncing' || row.status === 'synced' || row.status === 'failed'
       ? row.status
@@ -138,7 +140,7 @@ async function handleSearch(db: D1Database, userId: number, request: Request): P
   const orderBy = buildOrderBy(sortField, sortDir)
   const rows = await db
     .prepare(
-      `SELECT i.id, i.source, i.target, i.profile, i.enabled, i.synced, i.status, i.sync_error, i.notes, i.created_at, i.synced_at
+      `SELECT i.id, i.source, i.target, i.profile, i.enabled, i.pinned, i.synced, i.status, i.sync_error, i.notes, i.created_at, i.synced_at
        FROM images i
        ${whereSql}
        ORDER BY ${orderBy}
