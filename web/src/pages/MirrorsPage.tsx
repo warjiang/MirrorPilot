@@ -164,7 +164,6 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
 
   useEffect(() => {
     const controller = new AbortController()
-    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     searchMirrors({
       q: trimmedSearchQuery,
       page,
