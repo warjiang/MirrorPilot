@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { loadConfig, saveConfig } from '@/lib/cloudflare'
+import { saveConfig } from '@/lib/cloudflare'
 import { emptyConfig } from '@/lib/types'
 import type { MirrorConfig } from '@/lib/types'
 import { toast } from '@/components/Toaster'
@@ -15,9 +15,7 @@ export function useCloudflareStorage() {
       return emptyConfig()
     }
   })
-  // Start as true so the initial fetch shows a loading state without
-  // needing a synchronous setState call inside a useEffect body.
-  const [loading, setLoading] = useState(true)
+  const loading = false
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<number>(0)
@@ -55,41 +53,13 @@ export function useCloudflareStorage() {
     return () => controller.abort()
   }, [config])
 
-  // Initial fetch — inlined to avoid synchronous setState inside the effect
-  // body (which would trigger react-hooks/set-state-in-effect).
   useEffect(() => {
     mountedRef.current = true
-    loadConfig()
-      .then(fetched => {
-        if (!mountedRef.current) return
-        setConfigState(fetched)
-        toast('Pulled latest config from Cloudflare')
-      })
-      .catch((e: unknown) => {
-        if (!mountedRef.current) return
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(msg)
-        toast(msg, 'error')
-      })
-      .finally(() => {
-        if (mountedRef.current) setLoading(false)
-      })
     return () => { mountedRef.current = false }
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const fetched = await loadConfig()
-      setConfigState(fetched)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      toast(msg, 'error')
-    } finally {
-      setLoading(false)
-    }
+    return
   }, [])
 
   const save = useCallback(async () => {

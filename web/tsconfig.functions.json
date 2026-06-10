@@ -5,6 +5,10 @@
     "lib": ["ES2022", "WebWorker"],
     "module": "esnext",
     "moduleResolution": "bundler",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@functions/*": ["./functions/*"]
+    },
     "types": ["@cloudflare/workers-types"],
     "skipLibCheck": true,
     "strict": true,

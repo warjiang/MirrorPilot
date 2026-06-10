@@ -1,4 +1,4 @@
-import type { Env } from '../../_env'
+import type { Env } from '@functions/_env'
 
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
   // Get the latest web-sync workflow run

@@ -1,5 +1,5 @@
-import type { Env } from '../../_env'
-import type { MirrorConfig, RegistryProfile, ImageEntry } from '../../../src/lib/types'
+import type { Env } from '@functions/_env'
+import type { MirrorConfig, RegistryProfile, ImageEntry } from '@/lib/types'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {

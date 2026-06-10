@@ -1,5 +1,6 @@
-import type { Env } from '../../_env'
-import type { ImageEntry } from '../../../src/lib/types'
+import type { Env } from '@functions/_env'
+import type { ImageEntry } from '@/lib/types'
+import type { RegistryProfile } from '@/lib/types'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -56,6 +57,13 @@ interface CountRow {
   total: number
 }
 
+interface ProfileRow {
+  name: string
+  registry: string
+  username: string
+  password: string
+}
+
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 
@@ -75,9 +83,17 @@ function parseSortDir(raw: string | null): SortDir {
   return raw === 'asc' ? 'asc' : 'desc'
 }
 
+function parseIncludeProfiles(raw: string | null): boolean {
+  return raw === '1' || raw === 'true'
+}
+
 function buildOrderBy(sortField: SortField | null, sortDir: SortDir): string {
   if (!sortField) {
-    return 'i.pinned DESC, i.enabled DESC, i.rowid DESC'
+    return `CASE
+      WHEN i.enabled = 1 AND i.status = 'pending' THEN 0
+      WHEN i.status = 'syncing' THEN 1
+      ELSE 2
+    END ASC, i.enabled DESC, i.rowid DESC`
   }
 
   if (sortField === 'enabled') {
@@ -114,9 +130,10 @@ async function handleSearch(db: D1Database, userId: number, request: Request): P
   const url = new URL(request.url)
   const q = (url.searchParams.get('q') ?? '').trim()
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
-  const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100)
+  const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 1000)
   const sortField = parseSortField(url.searchParams.get('sortField'))
   const sortDir = parseSortDir(url.searchParams.get('sortDir'))
+  const includeProfiles = parseIncludeProfiles(url.searchParams.get('includeProfiles'))
 
   const whereSql = q
     ? `WHERE i.user_id = ? AND (
@@ -136,7 +153,6 @@ async function handleSearch(db: D1Database, userId: number, request: Request): P
   const count = await countStmt.first<CountRow>()
   const total = count?.total ?? 0
 
-  const offset = (page - 1) * pageSize
   const orderBy = buildOrderBy(sortField, sortDir)
   const rows = await db
     .prepare(
@@ -146,16 +162,42 @@ async function handleSearch(db: D1Database, userId: number, request: Request): P
        ORDER BY ${orderBy}
        LIMIT ? OFFSET ?`
     )
-    .bind(...params, pageSize, offset)
+    .bind(...params, pageSize, (page - 1) * pageSize)
     .all<ImageRow>()
 
-  return json({
+  const response: {
+    q: string
+    page: number
+    pageSize: number
+    total: number
+    items: ImageEntry[]
+    profiles?: Record<string, RegistryProfile>
+  } = {
     q,
     page,
     pageSize,
     total,
     items: rows.results.map(mapRowToImage),
-  })
+  }
+
+  if (includeProfiles) {
+    const profileRows = await db
+      .prepare('SELECT name, registry, username_env AS username, password_env AS password FROM profiles WHERE user_id = ? ORDER BY name ASC')
+      .bind(userId)
+      .all<ProfileRow>()
+
+    const profiles: Record<string, RegistryProfile> = {}
+    for (const row of profileRows.results) {
+      profiles[row.name] = {
+        registry: row.registry,
+        username: row.username || undefined,
+        password: row.password || undefined,
+      }
+    }
+    response.profiles = profiles
+  }
+
+  return json(response)
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {

@@ -1,4 +1,4 @@
-import type { Env } from '../../_env'
+import type { Env } from '@functions/_env'
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   // Dev bypass: return dev user when DEV_USER_EMAIL is configured

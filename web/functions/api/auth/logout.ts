@@ -1,4 +1,4 @@
-import type { Env } from '../../_env'
+import type { Env } from '@functions/_env'
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   const cookie = request.headers.get('Cookie') || ''

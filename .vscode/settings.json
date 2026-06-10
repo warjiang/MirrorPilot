@@ -1,4 +1,7 @@
 {
   "tailwindCSS.lint.invalidVariant": "ignore",
-  "tailwindCSS.lint.suggestCanonicalClasses": "ignore"
+  "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
+  "cSpell.words": [
+    "cmdk"
+  ]
 }
