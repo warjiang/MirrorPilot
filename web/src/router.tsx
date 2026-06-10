@@ -32,7 +32,7 @@ export function AppRouter() {
         >
           <Route
             path="mirrors"
-            element={<MirrorsPage config={config} setConfig={setConfig} lastSavedAt={lastSavedAt} />}
+            element={<MirrorsPage config={config} setConfig={setConfig} lastSavedAt={lastSavedAt} loading={loading} />}
           />
           <Route
             path="profiles"

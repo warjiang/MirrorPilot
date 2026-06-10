@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
-  Pencil,
   Trash2,
   ToggleLeft,
   ToggleRight,
@@ -15,8 +14,6 @@ import {
   CircleAlert,
   CheckCircle2,
   Clock3,
-  Pin,
-  PinOff,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -50,6 +47,7 @@ interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
   lastSavedAt: number
+  loading: boolean
 }
 
 interface FormState {
@@ -122,10 +120,9 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
+export function MirrorsPage({ config, setConfig, lastSavedAt, loading }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
-  const [editIndex, setEditIndex] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>({
     source: '', target: '', targetTouched: false,
     profile: profileNames[0] ?? 'default', notes: '',
@@ -168,6 +165,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
   const trimmedSearchQuery = searchQuery.trim()
 
   useEffect(() => {
+    if (loading) return
     const controller = new AbortController()
     searchMirrors({
       q: trimmedSearchQuery,
@@ -195,7 +193,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
       })
 
     return () => controller.abort()
-  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce, lastSavedAt])
+  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce, loading])
 
   const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -261,22 +259,12 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
 
   function startCreate() {
     setFormOpen(true)
-    setEditIndex(null)
     setForm({ source: '', target: '', targetTouched: false, profile: profileNames[0] ?? 'default', notes: '' })
-    setFormError(null)
-  }
-
-  function startEdit(index: number) {
-    const entry = config.images[index]
-    setFormOpen(true)
-    setEditIndex(index)
-    setForm({ source: entry.source, target: entry.target, targetTouched: true, profile: entry.profile, notes: entry.notes ?? '' })
     setFormError(null)
   }
 
   function cancelForm() {
     setFormOpen(false)
-    setEditIndex(null)
     setFormError(null)
   }
 
@@ -288,48 +276,19 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
     if (tgtErr) { setFormError(`Target: ${tgtErr}`); return }
 
     const now = new Date().toISOString()
-    if (editIndex !== null) {
-      const original = config.images[editIndex]
-      const syncChanged =
-        original.source !== form.source.trim() ||
-        original.target !== finalTarget ||
-        original.profile !== form.profile
-
-      setConfig((c) => ({
-        ...c,
-        images: c.images.map((img, i) =>
-          i === editIndex
-            ? {
-                ...img,
-                source: form.source.trim(),
-                target: finalTarget,
-                profile: form.profile,
-                notes: form.notes.trim() || undefined,
-                ...(syncChanged
-                  ? { synced: undefined, status: 'pending' as const, syncedAt: undefined, syncError: undefined }
-                  : {}),
-              }
-            : img
-        ),
-      }))
-      setListNonce((n) => n + 1)
-      toast('Mirror entry updated')
-    } else {
-      const entry: ImageEntry = {
-        source: form.source.trim(),
-        target: finalTarget,
-        profile: form.profile,
-        enabled: true,
-        pinned: true,
-        status: 'pending',
-        createdAt: now,
-        notes: form.notes.trim() || undefined,
-      }
-      setConfig((c) => ({ ...c, images: [...c.images, entry] }))
-      setPage(1)
-      setListNonce((n) => n + 1)
-      toast(`Added ${form.source.trim()}`)
+    const entry: ImageEntry = {
+      source: form.source.trim(),
+      target: finalTarget,
+      profile: form.profile,
+      enabled: true,
+      status: 'pending',
+      createdAt: now,
+      notes: form.notes.trim() || undefined,
     }
+    setConfig((c) => ({ ...c, images: [...c.images, entry] }))
+    setPage(1)
+    setListNonce((n) => n + 1)
+    toast(`Added ${form.source.trim()}`)
     cancelForm()
   }
 
@@ -350,14 +309,6 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
     setConfig((c) => ({
       ...c,
       images: c.images.map((img, i) => (i === index ? { ...img, enabled: !img.enabled } : img)),
-    }))
-    setListNonce((n) => n + 1)
-  }
-
-  function togglePinned(index: number) {
-    setConfig((c) => ({
-      ...c,
-      images: c.images.map((img, i) => (i === index ? { ...img, pinned: !img.pinned } : img)),
     }))
     setListNonce((n) => n + 1)
   }
@@ -509,7 +460,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
       <CardContent className="flex flex-col gap-4">
         {formOpen && (
           <div className="rounded-lg border border-dashed p-4 space-y-3">
-            <p className="text-sm font-medium">{editIndex !== null ? 'Edit Mirror' : 'New Mirror'}</p>
+            <p className="text-sm font-medium">New Mirror</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label>Source image</Label>
@@ -548,7 +499,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
             </div>
             {formError && <p className="text-destructive text-sm">{formError}</p>}
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave}>{editIndex !== null ? 'Save' : 'Add'}</Button>
+              <Button size="sm" onClick={handleSave}>Add</Button>
               <Button size="sm" variant="outline" onClick={cancelForm}>Cancel</Button>
             </div>
           </div>
@@ -578,7 +529,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
                 />
               </div>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                {searchResult.total}/{config.images.length}
+                {searchResult.total}
               </span>
             </div>
 
@@ -611,7 +562,7 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
                       >
                         Synced <SortIndicator active={sortField === 'syncedAt'} dir={sortDir} />
                       </TableHead>
-                      <TableHead className="w-[176px] text-right">Actions</TableHead>
+                      <TableHead className="w-[112px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -663,34 +614,6 @@ export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
                                 {copiedIndex === originalIndex
                                   ? <Check className="size-3.5 text-green-600" />
                                   : <Copy className="size-3.5" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7"
-                                onClick={() => {
-                                  if (actionsDisabled) return
-                                  togglePinned(originalIndex)
-                                }}
-                                disabled={actionsDisabled}
-                                title={actionsDisabled ? 'Loading latest item mapping...' : (entry.pinned ? 'Unpin' : 'Pin')}
-                              >
-                                {entry.pinned
-                                  ? <PinOff className="size-3.5 text-amber-600" />
-                                  : <Pin className="size-3.5" />}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="size-7"
-                                onClick={() => {
-                                  if (actionsDisabled) return
-                                  startEdit(originalIndex)
-                                }}
-                                disabled={actionsDisabled}
-                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Edit'}
-                              >
-                                <Pencil className="size-3.5" />
                               </Button>
                               <Button
                                 variant="ghost"

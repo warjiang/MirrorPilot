@@ -1,4 +1,4 @@
-import type { Env } from '../../_env'
+import type { Env } from '@functions/_env'
 
 interface TokenResponse {
   access_token?: string

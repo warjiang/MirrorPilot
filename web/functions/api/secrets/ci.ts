@@ -1,4 +1,4 @@
-import type { Env } from '../../_env'
+import type { Env } from '@functions/_env'
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
