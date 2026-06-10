@@ -45,6 +45,7 @@ interface ProfileRow {
 }
 
 interface ImageRow {
+  id: number
   source: string
   target: string
   profile: string
@@ -64,7 +65,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
       .bind(userId)
       .all<ProfileRow>(),
     db
-      .prepare('SELECT source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
+      .prepare('SELECT id, source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
       .bind(userId)
       .all<ImageRow>(),
   ])
@@ -79,6 +80,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
   }
 
   const images: ImageEntry[] = imageResult.results.map((row) => ({
+    id: row.id,
     source: row.source,
     target: row.target,
     profile: row.profile,
@@ -111,10 +113,15 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
 
   const profiles = body.profiles ?? {}
   const images = body.images ?? []
+  const existingImageRows = await db
+    .prepare('SELECT id FROM images WHERE user_id = ?')
+    .bind(userId)
+    .all<{ id: number }>()
+  const existingImageIds = new Set(existingImageRows.results.map((row) => row.id))
+  const keptImageIds = new Set<number>()
 
   const statements: D1PreparedStatement[] = [
     db.prepare('DELETE FROM profiles WHERE user_id = ?').bind(userId),
-    db.prepare('DELETE FROM images WHERE user_id = ?').bind(userId),
   ]
 
   for (const [name, p] of Object.entries(profiles)) {
@@ -126,6 +133,29 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
   }
 
   for (const img of images) {
+    const incomingId = typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0
+      ? Math.trunc(img.id)
+      : null
+    if (incomingId !== null && existingImageIds.has(incomingId)) {
+      keptImageIds.add(incomingId)
+      statements.push(
+        db
+          .prepare(
+            'UPDATE images SET source = ?, target = ?, profile = ?, enabled = ?, notes = ? WHERE user_id = ? AND id = ?'
+          )
+          .bind(
+            img.source,
+            img.target,
+            img.profile ?? 'default',
+            img.enabled !== false ? 1 : 0,
+            img.notes ?? '',
+            userId,
+            incomingId,
+          )
+      )
+      continue
+    }
+
     statements.push(
       db
         .prepare(
@@ -144,6 +174,16 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
           img.createdAt ?? new Date().toISOString(),
           img.syncedAt ?? null,
         )
+    )
+  }
+
+  const removedIds = [...existingImageIds].filter((id) => !keptImageIds.has(id))
+  if (removedIds.length) {
+    const placeholders = removedIds.map(() => '?').join(',')
+    statements.push(
+      db
+        .prepare(`DELETE FROM images WHERE user_id = ? AND id IN (${placeholders})`)
+        .bind(userId, ...removedIds)
     )
   }
 
