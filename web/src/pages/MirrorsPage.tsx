@@ -184,22 +184,15 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     return indexed
   }, [config.images, sortField, sortDir])
 
-  useEffect(() => {
-    setPage(1)
-  }, [searchQuery, sortField, sortDir])
-
-  const useServerSearch = searchQuery.trim().length > 0
+  const trimmedSearchQuery = searchQuery.trim()
+  const useServerSearch = trimmedSearchQuery.length > 0
 
   useEffect(() => {
-    if (!useServerSearch) {
-      setSearchResult((prev) => ({ ...prev, error: null, loading: false }))
-      return
-    }
+    if (!useServerSearch) return
 
     const controller = new AbortController()
-    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     searchMirrors({
-      q: searchQuery.trim(),
+      q: trimmedSearchQuery,
       page,
       pageSize: PAGE_SIZE,
       sortField: sortField ?? undefined,
@@ -224,22 +217,17 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       })
 
     return () => controller.abort()
-  }, [useServerSearch, searchQuery, page, sortField, sortDir])
+  }, [useServerSearch, trimmedSearchQuery, page, sortField, sortDir])
 
   const localTotalPages = Math.max(1, Math.ceil(sortedImages.length / PAGE_SIZE))
   const remoteTotalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const totalPages = useServerSearch ? remoteTotalPages : localTotalPages
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
+  const currentPage = Math.min(page, totalPages)
 
   const pagedLocalImages = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
+    const start = (currentPage - 1) * PAGE_SIZE
     return sortedImages.slice(start, start + PAGE_SIZE)
-  }, [sortedImages, page])
+  }, [sortedImages, currentPage])
 
   const visibleRows = useMemo(() => {
     if (!useServerSearch) return pagedLocalImages
@@ -255,6 +243,10 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   }, [useServerSearch, pagedLocalImages, searchResult.items, config.images])
 
   function toggleSort(field: SortField) {
+    setPage(1)
+    if (useServerSearch) {
+      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+    }
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -542,7 +534,16 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                 <Input
                   placeholder="Filter by source, target, profile, notes..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setSearchQuery(next)
+                    setPage(1)
+                    if (next.trim().length > 0) {
+                      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                    } else {
+                      setSearchResult({ total: 0, items: [], loading: false, error: null })
+                    }
+                  }}
                   className="pl-9"
                 />
               </div>
@@ -648,7 +649,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                 </div>
                 <div className="flex items-center justify-between px-1">
                   <span className="text-muted-foreground text-xs">
-                    Page {page}/{totalPages}
+                    Page {currentPage}/{totalPages}
                   </span>
                   {searchResult.loading ? (
                     <span className="text-muted-foreground text-xs">Searching...</span>
@@ -659,16 +660,26 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
+                      onClick={() => {
+                        setPage((p) => Math.max(1, Math.min(totalPages, p) - 1))
+                        if (useServerSearch) {
+                          setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                        }
+                      }}
+                      disabled={currentPage <= 1}
                     >
                       Prev
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
+                      onClick={() => {
+                        setPage((p) => Math.min(totalPages, Math.min(totalPages, p) + 1))
+                        if (useServerSearch) {
+                          setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                        }
+                      }}
+                      disabled={currentPage >= totalPages}
                     >
                       Next
                     </Button>
