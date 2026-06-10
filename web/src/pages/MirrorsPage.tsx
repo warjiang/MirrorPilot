@@ -49,7 +49,7 @@ import { searchMirrors } from '@/lib/cloudflare'
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
-  reloadConfig: () => Promise<void>
+  lastSavedAt: number
 }
 
 interface FormState {
@@ -122,7 +122,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
+export function MirrorsPage({ config, setConfig, lastSavedAt }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
   const [editIndex, setEditIndex] = useState<number | null>(null)
@@ -196,6 +196,11 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
 
     return () => controller.abort()
   }, [trimmedSearchQuery, page, sortField, sortDir, listNonce])
+
+  useEffect(() => {
+    if (!lastSavedAt) return
+    setListNonce((n) => n + 1)
+  }, [lastSavedAt])
 
   const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
@@ -388,10 +393,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
         }
       }
 
-      if (shouldReload) {
-        await reloadConfig()
-        setListNonce((n) => n + 1)
-      }
+      if (shouldReload) setListNonce((n) => n + 1)
       if (manual) toast('Refreshed')
     } catch (e) {
       if (manual) {
@@ -401,15 +403,19 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     } finally {
       if (manual) setRefreshingNow(false)
     }
-  }, [reloadConfig])
+  }, [])
 
   const hasSyncingImages = useMemo(
-    () => config.images.some((img) => getImageSyncStatus(img) === 'syncing'),
-    [config.images]
+    () => searchResult.items.some((img) => getImageSyncStatus(img) === 'syncing'),
+    [searchResult.items]
   )
 
   useEffect(() => {
-    if (!hasSyncingImages && !syncingNow) return
+    const shouldPoll =
+      syncingNow ||
+      hasSyncingImages ||
+      (latestRun !== null && latestRun.status !== 'completed')
+    if (!shouldPoll) return
     let stopped = false
     const tick = async () => {
       if (stopped) return
@@ -421,7 +427,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       stopped = true
       window.clearInterval(timer)
     }
-  }, [hasSyncingImages, syncingNow, refreshSyncState])
+  }, [hasSyncingImages, syncingNow, latestRun, refreshSyncState])
 
   async function handleTriggerSync() {
     setSyncingNow(true)

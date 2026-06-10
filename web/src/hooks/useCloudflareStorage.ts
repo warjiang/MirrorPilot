@@ -20,6 +20,7 @@ export function useCloudflareStorage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<number>(0)
   const mountedRef = useRef(true)
   const pendingSaveRef = useRef(false)
 
@@ -37,7 +38,10 @@ export function useCloudflareStorage() {
     setSyncing(true)
     saveConfig(config)
       .then(() => {
-        if (mountedRef.current) toast('Config saved')
+        if (mountedRef.current) {
+          setLastSavedAt(Date.now())
+          toast('Config saved')
+        }
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
@@ -93,6 +97,7 @@ export function useCloudflareStorage() {
     setError(null)
     try {
       await saveConfig(config)
+      setLastSavedAt(Date.now())
       toast('Pushed config to Cloudflare')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -108,5 +113,5 @@ export function useCloudflareStorage() {
     setConfigState((prev) => typeof updater === 'function' ? updater(prev) : updater)
   }, [])
 
-  return { config, setConfig, loading, syncing, error, load, save }
+  return { config, setConfig, loading, syncing, error, load, save, lastSavedAt }
 }
