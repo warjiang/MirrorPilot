@@ -139,7 +139,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     items: ImageEntry[]
     loading: boolean
     error: string | null
-  }>({ total: 0, items: [], loading: false, error: null })
+  }>({ total: 0, items: [], loading: true, error: null })
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
   const [latestRun, setLatestRun] = useState<{ status: string; conclusion: string | null; url: string } | null>(null)
@@ -160,36 +160,9 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen])
 
-  const sortedImages = useMemo(() => {
-    const indexed = config.images.map((img, i) => ({ img, i }))
-
-    if (!sortField) {
-      return [...indexed].sort((a, b) => {
-        const enabledCmp = (b.img.enabled ? 1 : 0) - (a.img.enabled ? 1 : 0)
-        if (enabledCmp !== 0) return enabledCmp
-        return a.i - b.i
-      })
-    }
-    indexed.sort((a, b) => {
-      let cmp: number
-      if (sortField === 'enabled') {
-        cmp = (a.img.enabled ? 1 : 0) - (b.img.enabled ? 1 : 0)
-      } else {
-        const aVal = a.img[sortField] ?? ''
-        const bVal = b.img[sortField] ?? ''
-        cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-    return indexed
-  }, [config.images, sortField, sortDir])
-
   const trimmedSearchQuery = searchQuery.trim()
-  const useServerSearch = trimmedSearchQuery.length > 0
 
   useEffect(() => {
-    if (!useServerSearch) return
-
     const controller = new AbortController()
     searchMirrors({
       q: trimmedSearchQuery,
@@ -217,36 +190,36 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       })
 
     return () => controller.abort()
-  }, [useServerSearch, trimmedSearchQuery, page, sortField, sortDir])
+  }, [trimmedSearchQuery, page, sortField, sortDir])
 
-  const localTotalPages = Math.max(1, Math.ceil(sortedImages.length / PAGE_SIZE))
-  const remoteTotalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
-  const totalPages = useServerSearch ? remoteTotalPages : localTotalPages
+  const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const currentPage = Math.min(page, totalPages)
 
-  const pagedLocalImages = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE
-    return sortedImages.slice(start, start + PAGE_SIZE)
-  }, [sortedImages, currentPage])
+  const imageIndexById = useMemo(() => {
+    const idx = new Map<number, number>()
+    for (let i = 0; i < config.images.length; i++) {
+      const id = config.images[i].id
+      if (typeof id === 'number') idx.set(id, i)
+    }
+    return idx
+  }, [config.images])
 
   const visibleRows = useMemo(() => {
-    if (!useServerSearch) return pagedLocalImages
-
     return searchResult.items.map((entry) => {
-      const originalIndex = config.images.findIndex((img) =>
-        img.source === entry.source &&
-        img.target === entry.target &&
-        img.profile === entry.profile
-      )
+      const originalIndex = typeof entry.id === 'number'
+        ? (imageIndexById.get(entry.id) ?? -1)
+        : config.images.findIndex((img) =>
+            img.source === entry.source &&
+            img.target === entry.target &&
+            img.profile === entry.profile
+          )
       return { img: entry, i: originalIndex }
-    }).filter((row) => row.i >= 0)
-  }, [useServerSearch, pagedLocalImages, searchResult.items, config.images])
+    })
+  }, [searchResult.items, imageIndexById, config.images])
 
   function toggleSort(field: SortField) {
     setPage(1)
-    if (useServerSearch) {
-      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
-    }
+    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -538,27 +511,23 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                     const next = e.target.value
                     setSearchQuery(next)
                     setPage(1)
-                    if (next.trim().length > 0) {
-                      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
-                    } else {
-                      setSearchResult({ total: 0, items: [], loading: false, error: null })
-                    }
+                    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
                   }}
                   className="pl-9"
                 />
               </div>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                {(useServerSearch ? searchResult.total : sortedImages.length)}/{config.images.length}
+                {searchResult.total}/{config.images.length}
               </span>
             </div>
 
-            {useServerSearch && searchResult.loading ? (
+            {searchResult.loading ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
                 Searching...
               </p>
-            ) : (useServerSearch ? searchResult.total : sortedImages.length) === 0 ? (
+            ) : searchResult.total === 0 ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
-                No entries match "{searchQuery}".
+                {trimmedSearchQuery ? `No entries match "${searchQuery}".` : 'No mirror entries yet.'}
               </p>
             ) : (
               <>
@@ -587,9 +556,10 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                   <TableBody>
                     {visibleRows.map(({ img: entry, i: originalIndex }) => {
                       const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
+                      const actionsDisabled = originalIndex < 0
                       return (
                         <TableRow
-                          key={`${entry.source}-${originalIndex}`}
+                          key={typeof entry.id === 'number' ? `${entry.id}` : `${entry.source}-${entry.target}-${entry.profile}`}
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
                           <TableCell className="py-2 pr-3">
@@ -622,21 +592,56 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                                 size="icon"
                                 className="size-7"
                                 aria-label="Copy target address"
-                                onClick={() => copyTarget(fullTarget, originalIndex)}
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  copyTarget(fullTarget, originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Copy target address'}
                               >
                                 {copiedIndex === originalIndex
                                   ? <Check className="size-3.5 text-green-600" />
                                   : <Copy className="size-3.5" />}
                               </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => startEdit(originalIndex)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  startEdit(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Edit'}
+                              >
                                 <Pencil className="size-3.5" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => toggleEnabled(originalIndex)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  toggleEnabled(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Enable/disable'}
+                              >
                                 {entry.enabled
                                   ? <ToggleRight className="size-3.5 text-primary" />
                                   : <ToggleLeft className="size-3.5 text-muted-foreground" />}
                               </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => deleteEntry(originalIndex)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  deleteEntry(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Delete'}
+                              >
                                 <Trash2 className="size-3.5" />
                               </Button>
                             </div>
@@ -662,9 +667,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                       variant="outline"
                       onClick={() => {
                         setPage((p) => Math.max(1, Math.min(totalPages, p) - 1))
-                        if (useServerSearch) {
-                          setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
-                        }
+                        setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
                       }}
                       disabled={currentPage <= 1}
                     >
@@ -675,9 +678,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                       variant="outline"
                       onClick={() => {
                         setPage((p) => Math.min(totalPages, Math.min(totalPages, p) + 1))
-                        if (useServerSearch) {
-                          setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
-                        }
+                        setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
                       }}
                       disabled={currentPage >= totalPages}
                     >
