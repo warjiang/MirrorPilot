@@ -38,6 +38,7 @@ async function getOrCreateUser(db: D1Database, email: string): Promise<number> {
 }
 
 interface ImageRow {
+  id: number
   source: string
   target: string
   profile: string
@@ -91,6 +92,7 @@ function buildOrderBy(sortField: SortField | null, sortDir: SortDir): string {
 
 function mapRowToImage(row: ImageRow): ImageEntry {
   return {
+    id: row.id,
     source: row.source,
     target: row.target,
     profile: row.profile,
@@ -136,7 +138,7 @@ async function handleSearch(db: D1Database, userId: number, request: Request): P
   const orderBy = buildOrderBy(sortField, sortDir)
   const rows = await db
     .prepare(
-      `SELECT i.source, i.target, i.profile, i.enabled, i.synced, i.status, i.sync_error, i.notes, i.created_at, i.synced_at
+      `SELECT i.id, i.source, i.target, i.profile, i.enabled, i.synced, i.status, i.sync_error, i.notes, i.created_at, i.synced_at
        FROM images i
        ${whereSql}
        ORDER BY ${orderBy}
