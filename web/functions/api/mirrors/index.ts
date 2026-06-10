@@ -50,6 +50,7 @@ interface ImageRow {
   target: string
   profile: string
   enabled: number
+  pinned: number
   synced: number
   status: string | null
   sync_error: string | null
@@ -81,7 +82,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
       .bind(userId)
       .all<ProfileRow>(),
     db
-      .prepare('SELECT id, source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
+      .prepare('SELECT id, source, target, profile, enabled, pinned, synced, status, sync_error, notes, created_at, synced_at FROM images WHERE user_id = ? ORDER BY rowid ASC')
       .bind(userId)
       .all<ImageRow>(),
   ])
@@ -101,6 +102,7 @@ async function handleGet(db: D1Database, userId: number): Promise<Response> {
     target: row.target,
     profile: row.profile,
     enabled: row.enabled === 1,
+    pinned: row.pinned === 1 ? true : undefined,
     synced: row.synced === 1 ? true : undefined,
     status: row.status === 'pending' || row.status === 'syncing' || row.status === 'synced' || row.status === 'failed'
       ? row.status
@@ -194,13 +196,14 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
       statements.push(
         db
           .prepare(
-            'UPDATE images SET source = ?, target = ?, profile = ?, enabled = ?, notes = ? WHERE user_id = ? AND id = ?'
+            'UPDATE images SET source = ?, target = ?, profile = ?, enabled = ?, pinned = COALESCE(?, pinned), notes = ? WHERE user_id = ? AND id = ?'
           )
           .bind(
             img.source,
             img.target,
             img.profile ?? 'default',
             img.enabled !== false ? 1 : 0,
+            typeof img.pinned === 'boolean' ? (img.pinned ? 1 : 0) : null,
             img.notes ?? '',
             userId,
             matchedId,
@@ -212,7 +215,7 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
     statements.push(
       db
         .prepare(
-          'INSERT INTO images (user_id, source, target, profile, enabled, synced, status, sync_error, notes, created_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO images (user_id, source, target, profile, enabled, pinned, synced, status, sync_error, notes, created_at, synced_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         )
         .bind(
           userId,
@@ -220,6 +223,7 @@ async function handlePut(db: D1Database, userId: number, request: Request): Prom
           img.target,
           img.profile ?? 'default',
           img.enabled !== false ? 1 : 0,
+          img.pinned ? 1 : 0,
           img.synced ? 1 : 0,
           img.status ?? (img.synced ? 'synced' : 'pending'),
           img.syncError ?? '',
