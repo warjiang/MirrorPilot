@@ -8,7 +8,7 @@ import { AuthGuard } from '@/components/AuthGuard'
 import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 
 export function AppRouter() {
-  const { config, setConfig, loading, syncing, error, lastSavedAt } =
+  const { config, setConfig, loading, syncing, error } =
     useCloudflareStorage()
 
   return (
@@ -32,7 +32,7 @@ export function AppRouter() {
         >
           <Route
             path="mirrors"
-            element={<MirrorsPage config={config} setConfig={setConfig} lastSavedAt={lastSavedAt} loading={loading} />}
+            element={<MirrorsPage config={config} setConfig={setConfig} loading={loading} />}
           />
           <Route
             path="profiles"

@@ -46,7 +46,6 @@ import { searchMirrors } from '@/lib/cloudflare'
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
-  lastSavedAt: number
   loading: boolean
 }
 
@@ -120,7 +119,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, lastSavedAt, loading }: Props) {
+export function MirrorsPage({ config, setConfig, loading }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<FormState>({
