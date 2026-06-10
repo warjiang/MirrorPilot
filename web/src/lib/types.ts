@@ -7,6 +7,7 @@ export interface RegistryProfile {
 }
 
 export interface ImageEntry {
+  id?: number
   source: string
   target: string
   profile: string
