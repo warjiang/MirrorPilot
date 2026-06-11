@@ -1,18 +1,105 @@
+import { Hono } from 'hono'
+import { and, eq } from 'drizzle-orm'
+import type { AppEnv } from '../types'
+import { registrySecrets } from '../db/schema'
 import {
+  apiHostFor,
   manifestExists,
   parseRef,
   pingRegistry,
   requestToken,
-} from './_registry'
+} from '../lib/registry'
 
-type CheckState =
-  | 'ok'
-  | 'exists'
-  | 'missing'
-  | 'failed'
-  | 'unreachable'
-  | 'error'
-  | 'skipped'
+// --- check-registry --------------------------------------------------------
+
+interface CheckRegistryResponse {
+  reachable: { ok: boolean; message: string }
+  auth: { ok: boolean; message: string }
+}
+
+async function checkRegistry(
+  registry: string,
+  username?: string,
+  password?: string
+): Promise<CheckRegistryResponse> {
+  const registryHost = registry.split('/')[0]
+  const apiHost = apiHostFor(registryHost)
+  const ping = await pingRegistry(apiHost)
+
+  if (!ping.reachable) {
+    return {
+      reachable: { ok: false, message: ping.error ?? 'unreachable' },
+      auth: { ok: false, message: 'skipped (registry unreachable)' },
+    }
+  }
+
+  let authResult: { ok: boolean; message: string } = { ok: true, message: 'no auth required' }
+
+  if (ping.authChallenge && (username || password)) {
+    const repo = registry.includes('/') ? registry.split('/').slice(1).join('/') + '/test' : 'test'
+    const tok = await requestToken(ping.authChallenge, repo, 'push,pull', username, password)
+    if (tok.ok) {
+      authResult = { ok: true, message: 'credentials accepted' }
+    } else {
+      authResult = { ok: false, message: tok.error ?? `auth failed (HTTP ${tok.status})` }
+    }
+  } else if (ping.authChallenge && !username) {
+    authResult = { ok: false, message: 'registry requires auth but no credentials provided' }
+  }
+
+  return {
+    reachable: { ok: true, message: `HTTP ${ping.status}` },
+    auth: authResult,
+  }
+}
+
+export const checkRegistryRoutes = new Hono<AppEnv>()
+
+checkRegistryRoutes.post('/', async (c) => {
+  const db = c.get('db')
+  const user = c.get('user')
+
+  let body: { registry?: string; username?: string; password?: string }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'invalid JSON body' }, 400)
+  }
+  if (!body.registry) {
+    return c.json({ error: 'registry is required' }, 400)
+  }
+
+  let username = body.username
+  let password = body.password
+
+  // If not provided in request, try to load saved credentials
+  if (!username && user) {
+    const rows = await db
+      .select({ destUser: registrySecrets.destUser, destPass: registrySecrets.destPass })
+      .from(registrySecrets)
+      .where(and(eq(registrySecrets.userId, user.id), eq(registrySecrets.registry, body.registry)))
+      .limit(1)
+    if (rows[0]) {
+      username = rows[0].destUser
+      password = rows[0].destPass
+    }
+  }
+
+  const result = await checkRegistry(body.registry, username, password)
+  return c.json(result)
+})
+
+checkRegistryRoutes.options('/', (c) =>
+  c.body(null, 200, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  })
+)
+
+// --- detect -----------------------------------------------------------------
+
+type CheckState = 'ok' | 'exists' | 'missing' | 'failed' | 'unreachable' | 'error' | 'skipped'
 
 interface CheckResult {
   state: CheckState
@@ -28,13 +115,6 @@ interface DetectRequest {
   password?: string
 }
 
-function json(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  })
-}
-
 function buildFullTarget(registry: string, target: string): string {
   const reg = registry.replace(/\/+$/, '').trim()
   const t = target.replace(/^\/+/, '').trim()
@@ -42,8 +122,6 @@ function buildFullTarget(registry: string, target: string): string {
   if (t === '') return reg
   return `${reg}/${t}`
 }
-
-// --- individual checks ---------------------------------------------------
 
 async function checkSource(source: string): Promise<CheckResult> {
   if (!source.trim()) return { state: 'skipped', message: 'no source provided' }
@@ -71,9 +149,7 @@ async function checkSource(source: string): Promise<CheckResult> {
   return { state: 'error', message: `unexpected status ${res.status}` }
 }
 
-async function checkTargetReachable(
-  targetRegistry: string
-): Promise<CheckResult> {
+async function checkTargetReachable(targetRegistry: string): Promise<CheckResult> {
   if (!targetRegistry.trim())
     return { state: 'skipped', message: 'no target registry configured' }
   const ref = parseRef(buildFullTarget(targetRegistry, 'probe'))
@@ -153,13 +229,7 @@ async function checkAuth(
   }
   // Request a push-scoped token: this validates the credentials are accepted
   // and are authorised to write to the mirror repository.
-  const tok = await requestToken(
-    ping.authChallenge,
-    ref.repository,
-    'pull,push',
-    username,
-    password
-  )
+  const tok = await requestToken(ping.authChallenge, ref.repository, 'pull,push', username, password)
   if (tok.ok) {
     return { state: 'ok', message: 'credentials accepted' }
   }
@@ -180,14 +250,14 @@ async function checkAuth(
   return { state: 'error', message: `unexpected status ${tok.status}` }
 }
 
-// --- handler -------------------------------------------------------------
+export const detectRoutes = new Hono<AppEnv>()
 
-export const onRequestPost: PagesFunction = async (context) => {
+detectRoutes.post('/', async (c) => {
   let body: DetectRequest
   try {
-    body = (await context.request.json()) as DetectRequest
+    body = await c.req.json()
   } catch {
-    return json({ error: 'invalid JSON body' }, 400)
+    return c.json({ error: 'invalid JSON body' }, 400)
   }
 
   const source = (body.source ?? '').trim()
@@ -197,7 +267,7 @@ export const onRequestPost: PagesFunction = async (context) => {
   const password = body.password || undefined
 
   if (!source && !targetRegistry) {
-    return json({ error: 'source or targetRegistry is required' }, 400)
+    return c.json({ error: 'source or targetRegistry is required' }, 400)
   }
 
   const [src, reachable, targetExists, auth] = await Promise.all([
@@ -207,14 +277,12 @@ export const onRequestPost: PagesFunction = async (context) => {
     checkAuth(targetRegistry, target, username, password),
   ])
 
-  return json({ source: src, targetReachable: reachable, targetExists, auth })
-}
+  return c.json({ source: src, targetReachable: reachable, targetExists, auth })
+})
 
-export const onRequestOptions: PagesFunction = async () =>
-  new Response(null, {
-    status: 204,
-    headers: {
-      'access-control-allow-methods': 'POST, OPTIONS',
-      'access-control-allow-headers': 'content-type',
-    },
+detectRoutes.options('/', (c) =>
+  c.body(null, 204, {
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'access-control-allow-headers': 'content-type',
   })
+)

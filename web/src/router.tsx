@@ -4,6 +4,7 @@ import { LandingPage } from '@/pages/LandingPage'
 import { MirrorsPage } from '@/pages/MirrorsPage'
 import { ProfilesPage } from '@/pages/ProfilesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { AdminPage } from '@/pages/AdminPage'
 import { AuthGuard } from '@/components/AuthGuard'
 import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 
@@ -44,6 +45,7 @@ export function AppRouter() {
             }
           />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="admin" element={<AdminPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

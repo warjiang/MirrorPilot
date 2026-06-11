@@ -1,0 +1,117 @@
+import { sql } from 'drizzle-orm'
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
+
+export const users = sqliteTable(
+  'users',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    email: text('email').notNull().unique(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    githubId: integer('github_id'),
+    name: text('name').notNull().default(''),
+    avatarUrl: text('avatar_url').notNull().default(''),
+    isAdmin: integer('is_admin').notNull().default(0),
+    passwordHash: text('password_hash'),
+    status: text('status').notNull().default('active'),
+  },
+  (t) => [
+    uniqueIndex('idx_users_github_id').on(t.githubId),
+    index('idx_users_admin').on(t.isAdmin),
+    index('idx_users_status').on(t.status),
+  ]
+)
+
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: text('expires_at').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    index('idx_sessions_user').on(t.userId),
+    index('idx_sessions_expires').on(t.expiresAt),
+  ]
+)
+
+export const profiles = sqliteTable(
+  'profiles',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    registry: text('registry').notNull().default(''),
+    usernameEnv: text('username_env').notNull().default(''),
+    passwordEnv: text('password_env').notNull().default(''),
+    credentialRegistry: text('credential_registry').default(''),
+  },
+  (t) => [
+    uniqueIndex('profiles_user_id_name_unique').on(t.userId, t.name),
+    index('idx_profiles_user').on(t.userId),
+  ]
+)
+
+export const images = sqliteTable(
+  'images',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    target: text('target').notNull(),
+    profile: text('profile').notNull().default('default'),
+    enabled: integer('enabled').notNull().default(1),
+    synced: integer('synced').notNull().default(0),
+    notes: text('notes').notNull().default(''),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    syncedAt: text('synced_at'),
+    status: text('status').notNull().default('pending'),
+    syncError: text('sync_error').notNull().default(''),
+    syncRunId: text('sync_run_id').notNull().default(''),
+  },
+  (t) => [index('idx_images_user').on(t.userId)]
+)
+
+export const registrySecrets = sqliteTable(
+  'registry_secrets',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    registry: text('registry').notNull(),
+    destUser: text('dest_user').notNull(),
+    destPass: text('dest_pass').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    uniqueIndex('registry_secrets_user_id_registry_unique').on(
+      t.userId,
+      t.registry
+    ),
+    index('idx_registry_secrets_user').on(t.userId),
+  ]
+)

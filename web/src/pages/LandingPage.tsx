@@ -10,6 +10,7 @@ import {
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmailAuthCard } from '@/components/EmailAuthCard'
 import { useAuth } from '@/hooks/useAuth'
 
 const features: Array<{
@@ -100,27 +101,22 @@ export function LandingPage() {
               </div>
 
               <div className="border border-border/70 bg-background/80 p-6 sm:p-7">
-                <div className="space-y-6">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-muted-foreground">What MirrorPilot keeps in view</p>
-                    <div className="space-y-3 text-sm leading-6 text-foreground">
-                      <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
-                        <span className="text-muted-foreground">Source declaration</span>
-                        <span className="font-medium">Explicit, versioned inputs</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-3">
-                        <span className="text-muted-foreground">Destination control</span>
-                        <span className="font-medium">Multiple registry profiles</span>
-                      </div>
-                      <div className="flex items-start justify-between gap-4">
-                        <span className="text-muted-foreground">Sync confidence</span>
-                        <span className="font-medium">Visible status in real time</span>
-                      </div>
-                    </div>
+                <div className="space-y-5">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">Sign in to MirrorPilot</p>
+                    <p className="text-sm text-muted-foreground">
+                      Use your email or continue with GitHub.
+                    </p>
                   </div>
-                  <p className="text-sm leading-6 text-muted-foreground">
-                    Quiet by design, direct in operation, and ready for dark-mode workstations as well as daytime dashboards.
-                  </p>
+                  <EmailAuthCard />
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-muted-foreground">
+                    <span className="h-px flex-1 bg-border/70" />
+                    or
+                    <span className="h-px flex-1 bg-border/70" />
+                  </div>
+                  <Button asChild variant="outline" className="w-full">
+                    <a href="/api/auth/github">Sign in with GitHub</a>
+                  </Button>
                 </div>
               </div>
             </div>

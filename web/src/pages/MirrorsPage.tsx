@@ -184,20 +184,36 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     return indexed
   }, [config.images, sortField, sortDir])
 
-  useEffect(() => {
+  // Reset to first page when search/sort changes (state adjustment during render)
+  const searchKey = `${searchQuery}\u0000${sortField ?? ''}\u0000${sortDir}`
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey)
+  if (searchKey !== prevSearchKey) {
+    setPrevSearchKey(searchKey)
     setPage(1)
-  }, [searchQuery, sortField, sortDir])
+  }
 
   const useServerSearch = searchQuery.trim().length > 0
 
+  // Mark loading / clear stale state when the server-search inputs change (state adjustment during render)
+  const fetchKey = useServerSearch
+    ? `${searchQuery.trim()}\u0000${page}\u0000${sortField ?? ''}\u0000${sortDir}`
+    : null
+  const [prevFetchKey, setPrevFetchKey] = useState(fetchKey)
+  if (fetchKey !== prevFetchKey) {
+    setPrevFetchKey(fetchKey)
+    if (fetchKey === null) {
+      setSearchResult((prev) => ({ ...prev, error: null, loading: false }))
+    } else {
+      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+    }
+  }
+
   useEffect(() => {
     if (!useServerSearch) {
-      setSearchResult((prev) => ({ ...prev, error: null, loading: false }))
       return
     }
 
     const controller = new AbortController()
-    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     searchMirrors({
       q: searchQuery.trim(),
       page,
@@ -230,11 +246,10 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   const remoteTotalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
   const totalPages = useServerSearch ? remoteTotalPages : localTotalPages
 
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages)
-    }
-  }, [page, totalPages])
+  // Clamp page when total shrinks (state adjustment during render)
+  if (page > totalPages) {
+    setPage(totalPages)
+  }
 
   const pagedLocalImages = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
