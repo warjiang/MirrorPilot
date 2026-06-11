@@ -44,7 +44,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply DB --env production
+          command: d1 migrations apply DB --env production --remote
           workingDirectory: web
 
       - name: Deploy to Cloudflare Pages
