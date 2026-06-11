@@ -393,7 +393,7 @@ export function MirrorsPage({ config, setConfig, loading }: Props) {
           }
         }),
       }))
-      toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'}`)
+      toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'} — track progress on the Jobs page`)
       void refreshSyncState({ showCompleteToast: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
