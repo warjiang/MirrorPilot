@@ -1,8 +1,9 @@
 import type { MirrorConfig } from './types'
 import type { ImageEntry } from './types'
+import { DEFAULT_PROFILE } from './types'
 
 export async function loadConfig(): Promise<MirrorConfig> {
-  const res = await fetch('/api/mirrors')
+  const res = await fetch('/api/config')
   if (!res.ok) {
     let detail = ''
     try {
@@ -15,7 +16,7 @@ export async function loadConfig(): Promise<MirrorConfig> {
 }
 
 export async function saveConfig(config: MirrorConfig): Promise<void> {
-  const res = await fetch('/api/mirrors', {
+  const res = await fetch('/api/config', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(config),
@@ -52,8 +53,10 @@ export async function searchMirrors(params: MirrorsSearchParams): Promise<Mirror
     page: String(params.page),
     pageSize: String(params.pageSize),
   })
-  if (params.sortField) query.set('sortField', params.sortField)
-  if (params.sortDir) query.set('sortDir', params.sortDir)
+  if (params.sortField) {
+    query.set('sortField', params.sortField)
+    if (params.sortDir) query.set('sortDir', params.sortDir)
+  }
 
   const res = await fetch(`/api/mirrors/search?${query.toString()}`)
   if (!res.ok) {
@@ -65,4 +68,22 @@ export async function searchMirrors(params: MirrorsSearchParams): Promise<Mirror
     throw new Error(`Failed to search mirrors (HTTP ${res.status})${detail}`)
   }
   return res.json() as Promise<MirrorsSearchResponse>
+}
+
+export async function loadConfigViaSearch(pageSize = 20): Promise<MirrorConfig> {
+  const size = Number.isFinite(pageSize) && pageSize > 0
+    ? Math.min(Math.trunc(pageSize), 1000)
+    : 20
+
+  const res = await searchMirrors({
+    q: '',
+    page: 1,
+    pageSize: size,
+  })
+
+  return {
+    version: 'v1',
+    profiles: { [DEFAULT_PROFILE]: { registry: '' } },
+    images: res.items,
+  }
 }

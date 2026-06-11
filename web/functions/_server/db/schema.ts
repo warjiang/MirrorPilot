@@ -77,6 +77,7 @@ export const images = sqliteTable(
     target: text('target').notNull(),
     profile: text('profile').notNull().default('default'),
     enabled: integer('enabled').notNull().default(1),
+    pinned: integer('pinned').notNull().default(0),
     synced: integer('synced').notNull().default(0),
     notes: text('notes').notNull().default(''),
     createdAt: text('created_at')
@@ -88,6 +89,46 @@ export const images = sqliteTable(
     syncRunId: text('sync_run_id').notNull().default(''),
   },
   (t) => [index('idx_images_user').on(t.userId)]
+)
+
+export const jobs = sqliteTable(
+  'jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    githubRunId: integer('github_run_id'),
+    imageTotal: integer('image_total').notNull().default(0),
+    imageSuccess: integer('image_success').notNull().default(0),
+    imageFailed: integer('image_failed').notNull().default(0),
+    error: text('error').notNull().default(''),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    startedAt: text('started_at'),
+    finishedAt: text('finished_at'),
+  },
+  (t) => [index('idx_jobs_user').on(t.userId, t.createdAt)]
+)
+
+export const jobItems = sqliteTable(
+  'job_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    imageId: integer('image_id').notNull(),
+    source: text('source').notNull(),
+    target: text('target').notNull(),
+    status: text('status').notNull().default('pending'),
+    error: text('error').notNull().default(''),
+    durationMs: integer('duration_ms'),
+    finishedAt: text('finished_at'),
+  },
+  (t) => [index('idx_job_items_job').on(t.jobId)]
 )
 
 export const registrySecrets = sqliteTable(

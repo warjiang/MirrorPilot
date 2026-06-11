@@ -16,6 +16,7 @@ interface Props {
 const navItems = [
   { to: '/mirrors', label: 'Mirrors' },
   { to: '/profiles', label: 'Profiles' },
+  { to: '/jobs', label: 'Jobs' },
   { to: '/settings', label: 'Settings' },
 ]
 

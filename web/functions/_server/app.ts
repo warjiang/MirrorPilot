@@ -7,6 +7,7 @@ import { adminRoutes } from './routes/admin'
 import { mirrorsRoutes, getConfigHandler, putConfigHandler } from './routes/mirrors'
 import { secretsRoutes } from './routes/secrets'
 import { ciSecretsRoutes, syncRoutes } from './routes/sync'
+import { jobsRoutes } from './routes/jobs'
 import { checkRegistryRoutes, detectRoutes } from './routes/registry-tools'
 
 export const app = new Hono<AppEnv>().basePath('/api')
@@ -23,6 +24,8 @@ app.use('/mirrors', authMiddleware)
 app.use('/mirrors/*', authMiddleware)
 app.use('/secrets/registry', authMiddleware)
 app.use('/admin/*', authMiddleware, adminMiddleware)
+app.use('/jobs', authMiddleware)
+app.use('/jobs/*', authMiddleware)
 app.use('/detect', authMiddleware)
 app.use('/check-registry', authMiddleware)
 
@@ -34,5 +37,6 @@ app.put('/config', putConfigHandler)
 app.route('/secrets/ci', ciSecretsRoutes)
 app.route('/secrets', secretsRoutes)
 app.route('/sync', syncRoutes)
+app.route('/jobs', jobsRoutes)
 app.route('/detect', detectRoutes)
 app.route('/check-registry', checkRegistryRoutes)

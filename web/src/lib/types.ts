@@ -7,10 +7,12 @@ export interface RegistryProfile {
 }
 
 export interface ImageEntry {
+  id?: number
   source: string
   target: string
   profile: string
   enabled: boolean
+  pinned?: boolean
   synced?: boolean
   status?: 'pending' | 'syncing' | 'synced' | 'failed'
   syncError?: string

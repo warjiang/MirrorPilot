@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus,
-  Pencil,
   Trash2,
   ToggleLeft,
   ToggleRight,
@@ -47,7 +46,8 @@ import { searchMirrors } from '@/lib/cloudflare'
 interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
-  reloadConfig: () => Promise<void>
+  loading: boolean
+  lastSavedAt: number
 }
 
 interface FormState {
@@ -120,10 +120,9 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
+export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
-  const [editIndex, setEditIndex] = useState<number | null>(null)
   const [form, setForm] = useState<FormState>({
     source: '', target: '', targetTouched: false,
     profile: profileNames[0] ?? 'default', notes: '',
@@ -134,15 +133,26 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [listNonce, setListNonce] = useState(0)
+
+  // Refresh the list once a config save has landed on the server,
+  // so newly added images show up immediately (and in server order).
+  useEffect(() => {
+    if (!lastSavedAt) return
+    const timer = window.setTimeout(() => setListNonce((n) => n + 1), 0)
+    return () => window.clearTimeout(timer)
+  }, [lastSavedAt])
   const [searchResult, setSearchResult] = useState<{
     total: number
     items: ImageEntry[]
     loading: boolean
     error: string | null
-  }>({ total: 0, items: [], loading: false, error: null })
+  }>({ total: 0, items: [], loading: true, error: null })
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
-  const [latestRun, setLatestRun] = useState<{ status: string; conclusion: string | null; url: string } | null>(null)
+  const [refreshingNow, setRefreshingNow] = useState(false)
+  const [latestRun, setLatestRun] = useState<{ id: number; status: string; conclusion: string | null; url: string } | null>(null)
+  const handledCompletedRunIdRef = useRef<number | null>(null)
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -160,62 +170,13 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formOpen])
 
-  const sortedImages = useMemo(() => {
-    const indexed = config.images.map((img, i) => ({ img, i }))
-
-    if (!sortField) {
-      return [...indexed].sort((a, b) => {
-        const enabledCmp = (b.img.enabled ? 1 : 0) - (a.img.enabled ? 1 : 0)
-        if (enabledCmp !== 0) return enabledCmp
-        return a.i - b.i
-      })
-    }
-    indexed.sort((a, b) => {
-      let cmp: number
-      if (sortField === 'enabled') {
-        cmp = (a.img.enabled ? 1 : 0) - (b.img.enabled ? 1 : 0)
-      } else {
-        const aVal = a.img[sortField] ?? ''
-        const bVal = b.img[sortField] ?? ''
-        cmp = aVal < bVal ? -1 : aVal > bVal ? 1 : 0
-      }
-      return sortDir === 'asc' ? cmp : -cmp
-    })
-    return indexed
-  }, [config.images, sortField, sortDir])
-
-  // Reset to first page when search/sort changes (state adjustment during render)
-  const searchKey = `${searchQuery}\u0000${sortField ?? ''}\u0000${sortDir}`
-  const [prevSearchKey, setPrevSearchKey] = useState(searchKey)
-  if (searchKey !== prevSearchKey) {
-    setPrevSearchKey(searchKey)
-    setPage(1)
-  }
-
-  const useServerSearch = searchQuery.trim().length > 0
-
-  // Mark loading / clear stale state when the server-search inputs change (state adjustment during render)
-  const fetchKey = useServerSearch
-    ? `${searchQuery.trim()}\u0000${page}\u0000${sortField ?? ''}\u0000${sortDir}`
-    : null
-  const [prevFetchKey, setPrevFetchKey] = useState(fetchKey)
-  if (fetchKey !== prevFetchKey) {
-    setPrevFetchKey(fetchKey)
-    if (fetchKey === null) {
-      setSearchResult((prev) => ({ ...prev, error: null, loading: false }))
-    } else {
-      setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
-    }
-  }
+  const trimmedSearchQuery = searchQuery.trim()
 
   useEffect(() => {
-    if (!useServerSearch) {
-      return
-    }
-
+    if (loading) return
     const controller = new AbortController()
     searchMirrors({
-      q: searchQuery.trim(),
+      q: trimmedSearchQuery,
       page,
       pageSize: PAGE_SIZE,
       sortField: sortField ?? undefined,
@@ -240,38 +201,45 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       })
 
     return () => controller.abort()
-  }, [useServerSearch, searchQuery, page, sortField, sortDir])
+  }, [trimmedSearchQuery, page, sortField, sortDir, listNonce, loading])
 
-  const localTotalPages = Math.max(1, Math.ceil(sortedImages.length / PAGE_SIZE))
-  const remoteTotalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
-  const totalPages = useServerSearch ? remoteTotalPages : localTotalPages
+  const totalPages = Math.max(1, Math.ceil(searchResult.total / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
 
-  // Clamp page when total shrinks (state adjustment during render)
-  if (page > totalPages) {
-    setPage(totalPages)
-  }
-
-  const pagedLocalImages = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE
-    return sortedImages.slice(start, start + PAGE_SIZE)
-  }, [sortedImages, page])
+  const imageIndexById = useMemo(() => {
+    const idx = new Map<number, number>()
+    for (let i = 0; i < config.images.length; i++) {
+      const id = config.images[i].id
+      if (typeof id === 'number') idx.set(id, i)
+    }
+    return idx
+  }, [config.images])
 
   const visibleRows = useMemo(() => {
-    if (!useServerSearch) return pagedLocalImages
-
     return searchResult.items.map((entry) => {
-      const originalIndex = config.images.findIndex((img) =>
-        img.source === entry.source &&
-        img.target === entry.target &&
-        img.profile === entry.profile
-      )
+      const originalIndex = typeof entry.id === 'number'
+        ? (imageIndexById.get(entry.id) ?? -1)
+        : config.images.findIndex((img) =>
+            img.source === entry.source &&
+            img.target === entry.target &&
+            img.profile === entry.profile
+          )
       return { img: entry, i: originalIndex }
-    }).filter((row) => row.i >= 0)
-  }, [useServerSearch, pagedLocalImages, searchResult.items, config.images])
+    })
+  }, [searchResult.items, imageIndexById, config.images])
 
   function toggleSort(field: SortField) {
+    setPage(1)
+    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      if (sortDir === 'desc') {
+        setSortDir('asc')
+      } else {
+        // Third click: back to the default priority ordering
+        // (pending+enabled first, then syncing, then the rest)
+        setSortField(null)
+        setSortDir('desc')
+      }
     } else {
       setSortField(field)
       setSortDir('desc')
@@ -306,22 +274,12 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
 
   function startCreate() {
     setFormOpen(true)
-    setEditIndex(null)
     setForm({ source: '', target: '', targetTouched: false, profile: profileNames[0] ?? 'default', notes: '' })
-    setFormError(null)
-  }
-
-  function startEdit(index: number) {
-    const entry = config.images[index]
-    setFormOpen(true)
-    setEditIndex(index)
-    setForm({ source: entry.source, target: entry.target, targetTouched: true, profile: entry.profile, notes: entry.notes ?? '' })
     setFormError(null)
   }
 
   function cancelForm() {
     setFormOpen(false)
-    setEditIndex(null)
     setFormError(null)
   }
 
@@ -333,44 +291,31 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     if (tgtErr) { setFormError(`Target: ${tgtErr}`); return }
 
     const now = new Date().toISOString()
-    if (editIndex !== null) {
-      const original = config.images[editIndex]
-      const syncChanged =
-        original.source !== form.source.trim() ||
-        original.target !== finalTarget ||
-        original.profile !== form.profile
-
-      setConfig((c) => ({
-        ...c,
-        images: c.images.map((img, i) =>
-          i === editIndex
-            ? {
-                ...img,
-                source: form.source.trim(),
-                target: finalTarget,
-                profile: form.profile,
-                notes: form.notes.trim() || undefined,
-                ...(syncChanged
-                  ? { synced: undefined, status: 'pending' as const, syncedAt: undefined, syncError: undefined }
-                  : {}),
-              }
-            : img
-        ),
-      }))
-      toast('Mirror entry updated')
-    } else {
-      const entry: ImageEntry = {
-        source: form.source.trim(),
-        target: finalTarget,
-        profile: form.profile,
-        enabled: true,
-        status: 'pending',
-        createdAt: now,
-        notes: form.notes.trim() || undefined,
-      }
-      setConfig((c) => ({ ...c, images: [...c.images, entry] }))
-      toast(`Added ${form.source.trim()}`)
+    const entry: ImageEntry = {
+      source: form.source.trim(),
+      target: finalTarget,
+      profile: form.profile,
+      enabled: true,
+      status: 'pending',
+      createdAt: now,
+      notes: form.notes.trim() || undefined,
     }
+    setConfig((c) => ({ ...c, images: [...c.images, entry] }))
+    // Back to the default priority ordering so the new pending image is on top
+    setSortField(null)
+    setSortDir('desc')
+    setPage(1)
+    // Optimistically show the new entry at the top of the list right away.
+    // The lastSavedAt-driven refresh replaces it with the authoritative row
+    // (with its server-assigned id) once the save lands.
+    if (!trimmedSearchQuery) {
+      setSearchResult((prev) => ({
+        ...prev,
+        total: prev.total + 1,
+        items: [entry, ...prev.items],
+      }))
+    }
+    toast(`Added ${form.source.trim()}`)
     cancelForm()
   }
 
@@ -382,6 +327,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
     if (deleteTarget === null) return
     const entry = config.images[deleteTarget]
     setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== deleteTarget) }))
+    setListNonce((n) => n + 1)
     toast(`Removed ${entry.source}`)
     setDeleteTarget(null)
   }
@@ -391,7 +337,70 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       ...c,
       images: c.images.map((img, i) => (i === index ? { ...img, enabled: !img.enabled } : img)),
     }))
+    setListNonce((n) => n + 1)
   }
+
+  const refreshSyncState = useCallback(async (opts?: { manual?: boolean; forceReload?: boolean; showCompleteToast?: boolean }) => {
+    const manual = opts?.manual === true
+    const forceReload = opts?.forceReload === true
+    const showCompleteToast = opts?.showCompleteToast !== false
+    if (manual) setRefreshingNow(true)
+    try {
+      const res = await fetch('/api/sync/status')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const data = await res.json() as {
+        runs: Array<{ id: number; status: string; conclusion: string | null; url: string }>
+      }
+      const run = data.runs[0]
+      let shouldReload = forceReload
+      if (run) {
+        setLatestRun(run)
+        if (run.status === 'completed' && handledCompletedRunIdRef.current !== run.id) {
+          handledCompletedRunIdRef.current = run.id
+          shouldReload = true
+          if (showCompleteToast) {
+            if (run.conclusion === 'success') toast('Sync completed successfully!', 'success')
+            else toast(`Sync finished with status: ${run.conclusion}`, 'error')
+          }
+        }
+      }
+
+      if (shouldReload) setListNonce((n) => n + 1)
+      if (manual) toast('Refreshed')
+    } catch (e) {
+      if (manual) {
+        const message = e instanceof Error ? e.message : 'Refresh failed'
+        toast(message, 'error')
+      }
+    } finally {
+      if (manual) setRefreshingNow(false)
+    }
+  }, [])
+
+  const hasSyncingImages = useMemo(
+    () => searchResult.items.some((img) => getImageSyncStatus(img) === 'syncing'),
+    [searchResult.items]
+  )
+
+  useEffect(() => {
+    const shouldPoll =
+      syncingNow ||
+      hasSyncingImages ||
+      (latestRun !== null && latestRun.status !== 'completed')
+    if (!shouldPoll) return
+    let stopped = false
+    const tick = async () => {
+      if (stopped) return
+      await refreshSyncState({ showCompleteToast: true })
+    }
+    void tick()
+    const timer = window.setInterval(() => { void tick() }, 5000)
+    return () => {
+      stopped = true
+      window.clearInterval(timer)
+    }
+  }, [hasSyncingImages, syncingNow, latestRun, refreshSyncState])
 
   async function handleTriggerSync() {
     setSyncingNow(true)
@@ -412,42 +421,13 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
           }
         }),
       }))
-      toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'}`)
-      // Start polling for workflow run status
-      pollSyncStatus()
+      toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'} — track progress on the Jobs page`)
+      void refreshSyncState({ showCompleteToast: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
       toast(message, 'error')
     } finally {
       setSyncingNow(false)
-    }
-  }
-
-  async function pollSyncStatus() {
-    // Wait a few seconds for the run to appear
-    await new Promise((r) => setTimeout(r, 3000))
-    for (let i = 0; i < 60; i++) {
-      try {
-        const res = await fetch('/api/sync/status')
-        if (res.ok) {
-          const data = await res.json() as { runs: Array<{ status: string; conclusion: string | null; url: string }> }
-          const run = data.runs[0]
-          if (run) {
-            setLatestRun(run)
-            if (run.status === 'completed') {
-              // Reload config from backend to get updated image statuses
-              await reloadConfig()
-              if (run.conclusion === 'success') {
-                toast('Sync completed successfully!', 'success')
-              } else {
-                toast(`Sync finished with status: ${run.conclusion}`, 'error')
-              }
-              return
-            }
-          }
-        }
-      } catch { /* ignore */ }
-      await new Promise((r) => setTimeout(r, 5000))
     }
   }
 
@@ -489,6 +469,15 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
               {syncingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
               Sync
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => { void refreshSyncState({ manual: true, forceReload: true, showCompleteToast: false }) }}
+              disabled={refreshingNow}
+            >
+              {refreshingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
+              Refresh
+            </Button>
             <Button size="sm" onClick={startCreate} disabled={formOpen}>
               <Plus /> Add Mirror
             </Button>
@@ -498,7 +487,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
       <CardContent className="flex flex-col gap-4">
         {formOpen && (
           <div className="rounded-lg border border-dashed p-4 space-y-3">
-            <p className="text-sm font-medium">{editIndex !== null ? 'Edit Mirror' : 'New Mirror'}</p>
+            <p className="text-sm font-medium">New Mirror</p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label>Source image</Label>
@@ -537,7 +526,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
             </div>
             {formError && <p className="text-destructive text-sm">{formError}</p>}
             <div className="flex gap-2">
-              <Button size="sm" onClick={handleSave}>{editIndex !== null ? 'Save' : 'Add'}</Button>
+              <Button size="sm" onClick={handleSave}>Add</Button>
               <Button size="sm" variant="outline" onClick={cancelForm}>Cancel</Button>
             </div>
           </div>
@@ -557,22 +546,27 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                 <Input
                   placeholder="Filter by source, target, profile, notes..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setSearchQuery(next)
+                    setPage(1)
+                    setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                  }}
                   className="pl-9"
                 />
               </div>
               <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                {(useServerSearch ? searchResult.total : sortedImages.length)}/{config.images.length}
+                {searchResult.total}
               </span>
             </div>
 
-            {useServerSearch && searchResult.loading ? (
+            {searchResult.loading ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
                 Searching...
               </p>
-            ) : (useServerSearch ? searchResult.total : sortedImages.length) === 0 ? (
+            ) : searchResult.total === 0 ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
-                No entries match "{searchQuery}".
+                {trimmedSearchQuery ? `No entries match "${searchQuery}".` : 'No mirror entries yet.'}
               </p>
             ) : (
               <>
@@ -595,15 +589,16 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                       >
                         Synced <SortIndicator active={sortField === 'syncedAt'} dir={sortDir} />
                       </TableHead>
-                      <TableHead className="w-[140px] text-right">Actions</TableHead>
+                      <TableHead className="w-[112px] text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map(({ img: entry, i: originalIndex }) => {
                       const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
+                      const actionsDisabled = originalIndex < 0
                       return (
                         <TableRow
-                          key={`${entry.source}-${originalIndex}`}
+                          key={typeof entry.id === 'number' ? `${entry.id}` : `${entry.source}-${entry.target}-${entry.profile}`}
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
                           <TableCell className="py-2 pr-3">
@@ -636,21 +631,43 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                                 size="icon"
                                 className="size-7"
                                 aria-label="Copy target address"
-                                onClick={() => copyTarget(fullTarget, originalIndex)}
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  copyTarget(fullTarget, originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Copy target address'}
                               >
                                 {copiedIndex === originalIndex
                                   ? <Check className="size-3.5 text-green-600" />
                                   : <Copy className="size-3.5" />}
                               </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => startEdit(originalIndex)}>
-                                <Pencil className="size-3.5" />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => toggleEnabled(originalIndex)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  toggleEnabled(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Enable/disable'}
+                              >
                                 {entry.enabled
                                   ? <ToggleRight className="size-3.5 text-primary" />
                                   : <ToggleLeft className="size-3.5 text-muted-foreground" />}
                               </Button>
-                              <Button variant="ghost" size="icon" className="size-7" onClick={() => deleteEntry(originalIndex)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="size-7"
+                                onClick={() => {
+                                  if (actionsDisabled) return
+                                  deleteEntry(originalIndex)
+                                }}
+                                disabled={actionsDisabled}
+                                title={actionsDisabled ? 'Loading latest item mapping...' : 'Delete'}
+                              >
                                 <Trash2 className="size-3.5" />
                               </Button>
                             </div>
@@ -663,7 +680,7 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                 </div>
                 <div className="flex items-center justify-between px-1">
                   <span className="text-muted-foreground text-xs">
-                    Page {page}/{totalPages}
+                    Page {currentPage}/{totalPages}
                   </span>
                   {searchResult.loading ? (
                     <span className="text-muted-foreground text-xs">Searching...</span>
@@ -674,16 +691,22 @@ export function MirrorsPage({ config, setConfig, reloadConfig }: Props) {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page <= 1}
+                      onClick={() => {
+                        setPage((p) => Math.max(1, Math.min(totalPages, p) - 1))
+                        setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                      }}
+                      disabled={currentPage <= 1}
                     >
                       Prev
                     </Button>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page >= totalPages}
+                      onClick={() => {
+                        setPage((p) => Math.min(totalPages, Math.min(totalPages, p) + 1))
+                        setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
+                      }}
+                      disabled={currentPage >= totalPages}
                     >
                       Next
                     </Button>

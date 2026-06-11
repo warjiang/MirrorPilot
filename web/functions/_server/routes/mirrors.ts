@@ -1,16 +1,18 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { and, asc, desc, eq, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
 import { images, profiles } from '../db/schema'
 import type { MirrorConfig, RegistryProfile, ImageEntry } from '../../../src/lib/types'
 
 interface ImageRow {
+  id: number
   source: string
   target: string
   profile: string
   enabled: number
+  pinned: number
   synced: number
   status: string | null
   syncError: string | null
@@ -21,10 +23,12 @@ interface ImageRow {
 
 function mapRowToImage(row: ImageRow): ImageEntry {
   return {
+    id: row.id,
     source: row.source,
     target: row.target,
     profile: row.profile,
     enabled: row.enabled === 1,
+    pinned: row.pinned === 1 ? true : undefined,
     synced: row.synced === 1 ? true : undefined,
     status:
       row.status === 'pending' || row.status === 'syncing' || row.status === 'synced' || row.status === 'failed'
@@ -38,10 +42,12 @@ function mapRowToImage(row: ImageRow): ImageEntry {
 }
 
 const imageSelection = {
+  id: images.id,
   source: images.source,
   target: images.target,
   profile: images.profile,
   enabled: images.enabled,
+  pinned: images.pinned,
   synced: images.synced,
   status: images.status,
   syncError: images.syncError,
@@ -109,9 +115,38 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   const profileEntries = Object.entries(body.profiles ?? {})
   const imageEntries = body.images ?? []
 
+  const existingImageRows = await db
+    .select({
+      id: images.id,
+      source: images.source,
+      target: images.target,
+      profile: images.profile,
+      createdAt: images.createdAt,
+    })
+    .from(images)
+    .where(eq(images.userId, userId))
+
+  const existingImageIds = new Set(existingImageRows.map((row) => row.id))
+  const keptImageIds = new Set<number>()
+  const exactMatchIds = new Map<string, number[]>()
+  const looseMatchIds = new Map<string, number[]>()
+  const imageMatchKey = (source: string, target: string, profile: string, createdAt?: string | null) =>
+    `${source}\u0000${target}\u0000${profile}\u0000${createdAt ?? ''}`
+  const imageLooseMatchKey = (source: string, target: string, profile: string) =>
+    `${source}\u0000${target}\u0000${profile}`
+  for (const row of existingImageRows) {
+    const exactKey = imageMatchKey(row.source, row.target, row.profile, row.createdAt)
+    const looseKey = imageLooseMatchKey(row.source, row.target, row.profile)
+    const exactList = exactMatchIds.get(exactKey)
+    if (exactList) exactList.push(row.id)
+    else exactMatchIds.set(exactKey, [row.id])
+    const looseList = looseMatchIds.get(looseKey)
+    if (looseList) looseList.push(row.id)
+    else looseMatchIds.set(looseKey, [row.id])
+  }
+
   const statements: BatchItem<'sqlite'>[] = [
     db.delete(profiles).where(eq(profiles.userId, userId)),
-    db.delete(images).where(eq(images.userId, userId)),
   ]
 
   for (const [name, p] of profileEntries) {
@@ -127,6 +162,56 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   }
 
   for (const img of imageEntries) {
+    let matchedId =
+      typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0 ? Math.trunc(img.id) : null
+    if (matchedId !== null && !existingImageIds.has(matchedId)) {
+      matchedId = null
+    }
+    if (matchedId === null) {
+      const exactKey = imageMatchKey(img.source, img.target, img.profile ?? 'default', img.createdAt)
+      const looseKey = imageLooseMatchKey(img.source, img.target, img.profile ?? 'default')
+      const exactList = exactMatchIds.get(exactKey)
+      while (exactList?.length) {
+        const candidate = exactList.shift()!
+        if (!keptImageIds.has(candidate)) {
+          matchedId = candidate
+          break
+        }
+      }
+      if (matchedId === null) {
+        const looseList = looseMatchIds.get(looseKey)
+        while (looseList?.length) {
+          const candidate = looseList.shift()!
+          if (!keptImageIds.has(candidate)) {
+            matchedId = candidate
+            break
+          }
+        }
+      }
+    }
+    if (matchedId !== null && existingImageIds.has(matchedId)) {
+      keptImageIds.add(matchedId)
+      statements.push(
+        db
+          .update(images)
+          .set({
+            source: img.source,
+            target: img.target,
+            profile: img.profile ?? 'default',
+            enabled: img.enabled !== false ? 1 : 0,
+            pinned:
+              typeof img.pinned === 'boolean'
+                ? img.pinned
+                  ? 1
+                  : 0
+                : sql`pinned`,
+            notes: img.notes ?? '',
+          })
+          .where(and(eq(images.userId, userId), eq(images.id, matchedId)))
+      )
+      continue
+    }
+
     statements.push(
       db.insert(images).values({
         userId,
@@ -134,6 +219,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
         target: img.target,
         profile: img.profile ?? 'default',
         enabled: img.enabled !== false ? 1 : 0,
+        pinned: img.pinned ? 1 : 0,
         synced: img.synced ? 1 : 0,
         status: img.status ?? (img.synced ? 'synced' : 'pending'),
         syncError: img.syncError ?? '',
@@ -141,6 +227,13 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
         createdAt: img.createdAt ?? new Date().toISOString(),
         syncedAt: img.syncedAt ?? null,
       })
+    )
+  }
+
+  const removedIds = [...existingImageIds].filter((id) => !keptImageIds.has(id))
+  if (removedIds.length) {
+    statements.push(
+      db.delete(images).where(and(eq(images.userId, userId), inArray(images.id, removedIds)))
     )
   }
 
@@ -172,8 +265,18 @@ function parseSortDir(raw: string | undefined): SortDir {
 
 function buildOrderBy(sortField: SortField | null, sortDir: SortDir) {
   const dir = sortDir === 'asc' ? asc : desc
+  if (!sortField) {
+    return [
+      asc(sql`CASE
+        WHEN enabled = 1 AND status = 'pending' THEN 0
+        WHEN status = 'syncing' THEN 1
+        ELSE 2
+      END`),
+      desc(images.enabled),
+      desc(sql`rowid`),
+    ]
+  }
   const rowid = asc(sql`rowid`)
-  if (!sortField) return [desc(images.enabled), rowid]
   if (sortField === 'enabled') return [dir(images.enabled), rowid]
   if (sortField === 'createdAt') return [dir(images.createdAt), rowid]
   return [dir(images.syncedAt), rowid]
@@ -185,9 +288,10 @@ mirrorsRoutes.get('/search', async (c) => {
 
   const q = (c.req.query('q') ?? '').trim()
   const page = parsePositiveInt(c.req.query('page'), 1)
-  const pageSize = Math.min(parsePositiveInt(c.req.query('pageSize'), 20), 100)
+  const pageSize = Math.min(parsePositiveInt(c.req.query('pageSize'), 20), 1000)
   const sortField = parseSortField(c.req.query('sortField'))
   const sortDir = parseSortDir(c.req.query('sortDir'))
+  const includeProfiles = c.req.query('includeProfiles') === '1' || c.req.query('includeProfiles') === 'true'
 
   const pattern = `%${q}%`
   const where = q
@@ -223,5 +327,30 @@ mirrorsRoutes.get('/search', async (c) => {
     pageSize,
     total,
     items: rows.map(mapRowToImage),
+    ...(includeProfiles
+      ? {
+          profiles: Object.fromEntries(
+            (
+              await db
+                .select({
+                  name: profiles.name,
+                  registry: profiles.registry,
+                  username: profiles.usernameEnv,
+                  password: profiles.passwordEnv,
+                })
+                .from(profiles)
+                .where(eq(profiles.userId, userId))
+                .orderBy(asc(profiles.name))
+            ).map((row) => [
+              row.name,
+              {
+                registry: row.registry,
+                username: row.username || undefined,
+                password: row.password || undefined,
+              } satisfies RegistryProfile,
+            ])
+          ),
+        }
+      : {}),
   })
 })

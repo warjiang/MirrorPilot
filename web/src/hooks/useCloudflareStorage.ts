@@ -15,13 +15,32 @@ export function useCloudflareStorage() {
       return emptyConfig()
     }
   })
-  // Start as true so the initial fetch shows a loading state without
-  // needing a synchronous setState call inside a useEffect body.
-  const [loading, setLoading] = useState(true)
+  const loading = false
   const [error, setError] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<number>(0)
   const mountedRef = useRef(true)
   const pendingSaveRef = useRef(false)
+  const editsRef = useRef(0)
+
+  // Reload config from the server (source of truth, includes server-assigned ids).
+  // Skipped if the user edited the config while the request was in flight.
+  const refreshFromServer = useCallback(async () => {
+    const editsBefore = editsRef.current
+    try {
+      const fresh = await loadConfig()
+      if (mountedRef.current && editsRef.current === editsBefore) {
+        setConfigState(fresh)
+      }
+    } catch {
+      // keep local copy when the server is unreachable
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshFromServer(), 0)
+    return () => window.clearTimeout(timer)
+  }, [refreshFromServer])
 
   useEffect(() => {
     try {
@@ -37,7 +56,12 @@ export function useCloudflareStorage() {
     setSyncing(true)
     saveConfig(config)
       .then(() => {
-        if (mountedRef.current) toast('Config saved')
+        if (mountedRef.current) {
+          setLastSavedAt(Date.now())
+          toast('Config saved')
+        }
+        // Pick up server-assigned ids for newly created entries
+        void refreshFromServer()
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
@@ -49,43 +73,15 @@ export function useCloudflareStorage() {
         if (mountedRef.current) setSyncing(false)
       })
     return () => controller.abort()
-  }, [config])
+  }, [config, refreshFromServer])
 
-  // Initial fetch — inlined to avoid synchronous setState inside the effect
-  // body (which would trigger react-hooks/set-state-in-effect).
   useEffect(() => {
     mountedRef.current = true
-    loadConfig()
-      .then(fetched => {
-        if (!mountedRef.current) return
-        setConfigState(fetched)
-        toast('Pulled latest config from Cloudflare')
-      })
-      .catch((e: unknown) => {
-        if (!mountedRef.current) return
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(msg)
-        toast(msg, 'error')
-      })
-      .finally(() => {
-        if (mountedRef.current) setLoading(false)
-      })
     return () => { mountedRef.current = false }
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const fetched = await loadConfig()
-      setConfigState(fetched)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      toast(msg, 'error')
-    } finally {
-      setLoading(false)
-    }
+    return
   }, [])
 
   const save = useCallback(async () => {
@@ -93,6 +89,7 @@ export function useCloudflareStorage() {
     setError(null)
     try {
       await saveConfig(config)
+      setLastSavedAt(Date.now())
       toast('Pushed config to Cloudflare')
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -104,9 +101,10 @@ export function useCloudflareStorage() {
   }, [config])
 
   const setConfig = useCallback((updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => {
+    editsRef.current += 1
     pendingSaveRef.current = true
     setConfigState((prev) => typeof updater === 'function' ? updater(prev) : updater)
   }, [])
 
-  return { config, setConfig, loading, syncing, error, load, save }
+  return { config, setConfig, loading, syncing, error, load, save, lastSavedAt }
 }
