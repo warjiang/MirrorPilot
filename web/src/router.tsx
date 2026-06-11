@@ -7,6 +7,7 @@ import { ProfilesPage } from '@/pages/ProfilesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { AdminPage } from '@/pages/AdminPage'
 import { AuthGuard } from '@/components/AuthGuard'
+import { RequireAdmin } from '@/components/RequireAdmin'
 import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 
 export function AppRouter() {
@@ -39,14 +40,23 @@ export function AppRouter() {
           <Route
             path="profiles"
             element={
-              <ProfilesPage
-                config={config}
-                setConfig={setConfig}
-              />
+              <RequireAdmin>
+                <ProfilesPage
+                  config={config}
+                  setConfig={setConfig}
+                />
+              </RequireAdmin>
             }
           />
           <Route path="jobs" element={<JobsPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route
+            path="settings"
+            element={
+              <RequireAdmin>
+                <SettingsPage />
+              </RequireAdmin>
+            }
+          />
           <Route path="admin" element={<AdminPage />} />
         </Route>
       </Routes>
