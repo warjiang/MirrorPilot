@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { desc, eq, isNotNull, sql } from 'drizzle-orm'
 import type { AppEnv } from '../types'
 import { images, profiles, registrySecrets, sessions, users } from '../db/schema'
+import { defaultAvatarUrl } from '../lib/avatar'
 
 const VALID_STATUSES = ['pending', 'active', 'disabled']
 
@@ -25,7 +26,9 @@ adminRoutes.get('/users', async (c) => {
     .from(users)
     .orderBy(desc(users.createdAt))
 
-  return c.json({ users: rows })
+  return c.json({
+    users: rows.map((u) => ({ ...u, avatar_url: u.avatar_url || defaultAvatarUrl(u.email) })),
+  })
 })
 
 adminRoutes.patch('/users/:id', async (c) => {
@@ -91,7 +94,8 @@ adminRoutes.patch('/users/:id', async (c) => {
     .from(users)
     .where(eq(users.id, targetId))
     .limit(1)
-  return c.json({ user: updated[0] })
+  const u = updated[0]
+  return c.json({ user: { ...u, avatar_url: u.avatar_url || defaultAvatarUrl(u.email) } })
 })
 
 adminRoutes.delete('/users/:id', async (c) => {
