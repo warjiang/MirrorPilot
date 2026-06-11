@@ -377,14 +377,39 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
     return c.json({ ok: false, message: 'No images to sync' })
   }
 
-  const payload = rows.map((row) => ({
-    id: row.id,
-    source: row.source,
-    target: row.target,
-    registry: row.registry || '',
-    username: row.username_env || '',
-    password: row.password_env || '',
-  }))
+  // Resolve credentials: profile credentials take priority, fallback to registrySecrets
+  const uniqueRegistries = [...new Set(rows.map((r) => r.registry).filter((r): r is string => !!r))]
+  const secretsMap = new Map<string, { destUser: string; destPass: string }>()
+  if (uniqueRegistries.length) {
+    const secretRows = await db
+      .select({ registry: registrySecrets.registry, destUser: registrySecrets.destUser, destPass: registrySecrets.destPass })
+      .from(registrySecrets)
+      .where(and(eq(registrySecrets.userId, userId), inArray(registrySecrets.registry, uniqueRegistries)))
+    for (const s of secretRows) {
+      secretsMap.set(s.registry, { destUser: s.destUser, destPass: s.destPass })
+    }
+  }
+
+  const payload = rows.map((row) => {
+    let username = row.username_env || ''
+    let password = row.password_env || ''
+    // Fallback to registrySecrets if profile has no credentials
+    if ((!username || !password) && row.registry) {
+      const secret = secretsMap.get(row.registry)
+      if (secret) {
+        username = username || secret.destUser
+        password = password || secret.destPass
+      }
+    }
+    return {
+      id: row.id,
+      source: row.source,
+      target: row.target,
+      registry: row.registry || '',
+      username,
+      password,
+    }
+  })
 
   // Create job + items before dispatching so the workflow can report back
   const jobId = crypto.randomUUID()
