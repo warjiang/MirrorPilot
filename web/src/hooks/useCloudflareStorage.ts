@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { saveConfig } from '@/lib/cloudflare'
+import { loadConfig, saveConfig } from '@/lib/cloudflare'
 import { emptyConfig } from '@/lib/types'
 import type { MirrorConfig } from '@/lib/types'
 import { toast } from '@/components/Toaster'
@@ -21,6 +21,26 @@ export function useCloudflareStorage() {
   const [lastSavedAt, setLastSavedAt] = useState<number>(0)
   const mountedRef = useRef(true)
   const pendingSaveRef = useRef(false)
+  const editsRef = useRef(0)
+
+  // Reload config from the server (source of truth, includes server-assigned ids).
+  // Skipped if the user edited the config while the request was in flight.
+  const refreshFromServer = useCallback(async () => {
+    const editsBefore = editsRef.current
+    try {
+      const fresh = await loadConfig()
+      if (mountedRef.current && editsRef.current === editsBefore) {
+        setConfigState(fresh)
+      }
+    } catch {
+      // keep local copy when the server is unreachable
+    }
+  }, [])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void refreshFromServer(), 0)
+    return () => window.clearTimeout(timer)
+  }, [refreshFromServer])
 
   useEffect(() => {
     try {
@@ -40,6 +60,8 @@ export function useCloudflareStorage() {
           setLastSavedAt(Date.now())
           toast('Config saved')
         }
+        // Pick up server-assigned ids for newly created entries
+        void refreshFromServer()
       })
       .catch((e: unknown) => {
         if (!mountedRef.current) return
@@ -51,7 +73,7 @@ export function useCloudflareStorage() {
         if (mountedRef.current) setSyncing(false)
       })
     return () => controller.abort()
-  }, [config])
+  }, [config, refreshFromServer])
 
   useEffect(() => {
     mountedRef.current = true
@@ -79,6 +101,7 @@ export function useCloudflareStorage() {
   }, [config])
 
   const setConfig = useCallback((updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => {
+    editsRef.current += 1
     pendingSaveRef.current = true
     setConfigState((prev) => typeof updater === 'function' ? updater(prev) : updater)
   }, [])
