@@ -11,6 +11,7 @@ import {
   normalizeEmail,
 } from '../lib/auth-email'
 import { hashPassword, verifyPassword } from '../lib/password'
+import { defaultAvatarUrl } from '../lib/avatar'
 import {
   clearSessionCookie,
   createSession,
@@ -60,7 +61,7 @@ function toApiUser(user: {
     id: user.id,
     email: user.email,
     name: user.name,
-    avatar_url: user.avatarUrl,
+    avatar_url: user.avatarUrl || defaultAvatarUrl(user.email),
     is_admin: user.isAdmin,
     status: user.status,
   }
@@ -375,6 +376,7 @@ authRoutes.post('/register/verify', async (c) => {
     .values({
       email,
       name: email.split('@')[0],
+      avatarUrl: defaultAvatarUrl(email),
       passwordHash: challenge.passwordHash,
       isAdmin: isAdmin ? 1 : 0,
       status,
@@ -446,7 +448,7 @@ authRoutes.get('/me', async (c) => {
     return c.json({
       user: user
         ? toApiUser(user)
-        : { id: 0, email: c.env.DEV_USER_EMAIL, name: 'Dev User', avatar_url: '', is_admin: 0, status: 'active' },
+        : { id: 0, email: c.env.DEV_USER_EMAIL, name: 'Dev User', avatar_url: defaultAvatarUrl(c.env.DEV_USER_EMAIL), is_admin: 0, status: 'active' },
     })
   }
 
