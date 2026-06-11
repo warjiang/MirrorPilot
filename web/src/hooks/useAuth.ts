@@ -53,6 +53,22 @@ export function useAuth() {
     if (!res.ok) {
       throw new Error(data.error || 'Registration failed')
     }
+    return data.status || 'verification_sent'
+  }
+
+  const verifyRegistrationCode = async (email: string, code: string) => {
+    const res = await fetch('/api/auth/register/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code }),
+    })
+    const data = (await res.json()) as { error?: string; status?: string }
+    if (!res.ok) {
+      throw new Error(data.error || 'Verification failed')
+    }
+    if (data.status === 'active') {
+      window.location.href = '/mirrors'
+    }
     return data.status || 'pending'
   }
 
@@ -62,5 +78,5 @@ export function useAuth() {
     window.location.href = '/'
   }
 
-  return { ...state, login, loginWithPassword, register, logout }
+  return { ...state, login, loginWithPassword, register, verifyRegistrationCode, logout }
 }

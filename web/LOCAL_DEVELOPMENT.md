@@ -61,10 +61,14 @@ GITHUB_TOKEN=YOUR_PERSONAL_ACCESS_TOKEN
 GITHUB_REPO=YOUR_GITHUB_USERNAME/MirrorPilot
 SYNC_SECRET=your-dev-secret-here
 ADMIN_EMAIL=dev@localhost
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM_ADDRESS=noreply@your-verified-domain.com
+EMAIL_FROM_NAME=MirrorPilot
 ```
 
 > 💡 **Tip**: If you set `DEV_USER_EMAIL=dev@localhost`, authentication will be **bypassed**
 > and you'll auto-login as the dev user. Remove/comment it if you want to test GitHub OAuth flow.
+> If you want to test email registration locally, keep `EMAIL_FROM_ADDRESS` on a domain verified in Resend and set `RESEND_API_KEY`.
 
 ### 4. Get GitHub Personal Access Token (PAT)
 
@@ -172,6 +176,9 @@ If you see CORS errors:
 | `GITHUB_REPO` | Optional | Repo identifier (owner/repo) |
 | `SYNC_SECRET` | Optional | Shared secret for API auth |
 | `ADMIN_EMAIL` | Optional | Make a user an admin |
+| `RESEND_API_KEY` | Optional | Resend API key for registration code emails |
+| `EMAIL_FROM_ADDRESS` | Optional | Verified sender used for registration codes |
+| `EMAIL_FROM_NAME` | Optional | Display name for registration code emails |
 
 *Only required if not using `DEV_USER_EMAIL`
 
