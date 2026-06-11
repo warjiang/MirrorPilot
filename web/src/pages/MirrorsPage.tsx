@@ -121,7 +121,19 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
 }
 
 export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) {
-  const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
+  const profileNames = useMemo(() => {
+    const set = new Set<string>()
+    for (const name of Object.keys(config.profiles)) {
+      const trimmed = name.trim()
+      if (trimmed) set.add(trimmed)
+    }
+    for (const img of config.images) {
+      const trimmed = (img.profile || '').trim()
+      if (trimmed) set.add(trimmed)
+    }
+    if (set.size === 0) set.add('default')
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [config.profiles, config.images])
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<FormState>({
     source: '', target: '', targetTouched: false,
@@ -291,10 +303,11 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
     if (tgtErr) { setFormError(`Target: ${tgtErr}`); return }
 
     const now = new Date().toISOString()
+    const selectedProfile = profileNames.includes(form.profile) ? form.profile : (profileNames[0] ?? 'default')
     const entry: ImageEntry = {
       source: form.source.trim(),
       target: finalTarget,
-      profile: form.profile,
+      profile: selectedProfile,
       enabled: true,
       status: 'pending',
       createdAt: now,
@@ -434,6 +447,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
   const effectiveTarget = form.targetTouched && form.target.trim()
     ? form.target
     : form.source.trim() ? deriveTarget(form.source) : ''
+  const selectedProfile = profileNames.includes(form.profile) ? form.profile : (profileNames[0] ?? 'default')
 
   return (
     <Card>
@@ -508,7 +522,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Profile</Label>
-                <Select value={form.profile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
+                <Select value={selectedProfile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {profileNames.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
