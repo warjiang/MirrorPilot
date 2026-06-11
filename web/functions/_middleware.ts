@@ -9,7 +9,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   // Pass through sync callback endpoints (they use SYNC_SECRET auth)
-  if (url.pathname === '/api/sync/pending' || url.pathname === '/api/sync/complete') {
+  if (
+    url.pathname === '/api/sync/pending' ||
+    url.pathname === '/api/sync/complete' ||
+    /^\/api\/sync\/jobs\/[^/]+\/(start|events|complete)$/.test(url.pathname)
+  ) {
     return next()
   }
 
