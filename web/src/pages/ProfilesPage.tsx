@@ -24,6 +24,18 @@ interface FormState {
 
 const emptyForm: FormState = { name: '', registry: '', username: '', password: '' }
 
+function formatRegistryLabel(registry: string): string {
+  const value = registry.trim()
+  if (!value) return '(not set)'
+
+  try {
+    const url = new URL(value.includes('://') ? value : `https://${value}`)
+    return url.hostname
+  } catch {
+    return value
+  }
+}
+
 export function ProfilesPage({ config, setConfig }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -225,7 +237,13 @@ export function ProfilesPage({ config, setConfig }: Props) {
                   <div className="flex items-center gap-3 min-w-0">
                     {isExpanded ? <ChevronDown className="size-4 text-muted-foreground shrink-0" /> : <ChevronRight className="size-4 text-muted-foreground shrink-0" />}
                     <span className="font-medium truncate">{name}</span>
-                    <Badge variant="outline" className="font-mono text-xs shrink-0">{p.registry || '(not set)'}</Badge>
+                    <Badge
+                      variant="outline"
+                      className="font-mono text-xs shrink-0"
+                      title={p.registry || undefined}
+                    >
+                      {formatRegistryLabel(p.registry)}
+                    </Badge>
                     {p.username && (
                       <Badge variant="secondary" className="text-xs shrink-0">🔑 {p.username}</Badge>
                     )}
