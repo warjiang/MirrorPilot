@@ -334,34 +334,31 @@ pnpm run deploy   # pnpm build && wrangler pages deploy
 
 ```
 web/
-├── migrations/
-│   ├── 0001_init.sql           # D1 schema: users, profiles, images
-│   ├── 0002_sessions.sql       # Sessions table + user OAuth fields
-│   ├── 0003_sync_status.sql    # Sync status columns on images
-│   ├── 0004_admin.sql          # Admin role support
-│   └── 0005_registry_secrets.sql # Registry credentials storage
+├── drizzle/
+│   ├── 0000_init.sql           # Drizzle baseline (idempotent; full schema)
+│   └── meta/                   # drizzle-kit journal + snapshots
+├── drizzle.config.ts           # drizzle-kit config (schema → drizzle/)
 ├── functions/
-│   ├── _env.ts                 # Shared Env interface (DB + secrets)
-│   ├── _middleware.ts          # Auth middleware (session validation)
-│   └── api/
-│       ├── mirrors/index.ts    # GET/PUT /api/mirrors — D1 read/write
-│       ├── mirrors/search.ts   # GET /api/mirrors/search — server-side search
-│       ├── config.ts           # legacy alias to mirrors/index
-│       ├── detect.ts           # POST /api/detect
-│       ├── check-registry.ts   # POST /api/check-registry
-│       ├── _registry.ts        # Docker Registry v2 client (token auth)
-│       ├── auth/
-│       │   ├── github.ts       # OAuth redirect
-│       │   ├── callback.ts     # OAuth callback + session creation
-│       │   ├── me.ts           # Current user info
-│       │   └── logout.ts       # Session destruction
-│       ├── secrets/
-│       │   ├── registry.ts     # GET/POST/DELETE registry credentials (UI)
-│       │   └── ci.ts           # GET registry credentials (for CI/CD)
-│       └── sync/
-│           ├── trigger.ts      # Trigger GitHub Actions sync
-│           ├── pending.ts      # Return pending images (for Actions)
-│           └── complete.ts     # Receive sync results (from Actions)
+│   ├── api/[[route]].ts        # Single Pages Function entry → Hono app
+│   └── _server/                # Hono application (not routed by Pages)
+│       ├── app.ts              # Hono app, routing + middleware wiring
+│       ├── env.ts              # Shared Env interface (DB + secrets)
+│       ├── types.ts            # Hono AppEnv (bindings + context vars)
+│       ├── db/
+│       │   ├── schema.ts       # Drizzle schema (source of truth)
+│       │   └── index.ts        # createDb(d1) helper
+│       ├── middleware/auth.ts  # Session auth + admin guard middleware
+│       ├── lib/
+│       │   ├── session.ts      # Session create/renew/lookup helpers
+│       │   ├── password.ts     # PBKDF2 password hashing
+│       │   └── registry.ts     # Docker Registry v2 client (token auth)
+│       └── routes/
+│           ├── auth.ts         # /api/auth/* — OAuth, register, login, me
+│           ├── admin.ts        # /api/admin/* — user management
+│           ├── mirrors.ts      # /api/mirrors, /api/mirrors/search, /api/config
+│           ├── secrets.ts      # /api/secrets/registry (UI credentials)
+│           ├── sync.ts         # /api/sync/*, /api/secrets/ci (CI/CD)
+│           └── registry-tools.ts # /api/detect, /api/check-registry
 ├── src/
 │   ├── layouts/
 │   │   └── AppLayout.tsx       # Shared nav shell with Pull/Push buttons

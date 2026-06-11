@@ -7,7 +7,7 @@ compatibility_date = "2024-09-23"
 database_id = "d9b21348-8005-4bd0-a429-ecd823bb981b"
 binding = "DB"
 database_name = "DB"
-migrations_dir = "migrations"
+migrations_dir = "drizzle"
 
 [[env.production.d1_databases]]
 database_id = "d9b21348-8005-4bd0-a429-ecd823bb981b"

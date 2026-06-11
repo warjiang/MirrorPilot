@@ -20,6 +20,8 @@ const navItems = [
   { to: '/settings', label: 'Settings' },
 ]
 
+const adminNavItem = { to: '/admin', label: 'Admin' }
+
 export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -42,7 +44,7 @@ export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
               <h1 className="text-lg font-semibold">MirrorPilot</h1>
             </div>
             <nav className="flex items-center gap-1">
-              {navItems.map((item) => (
+              {(user.is_admin ? [...navItems, adminNavItem] : navItems).map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}

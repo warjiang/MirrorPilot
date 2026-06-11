@@ -11,6 +11,9 @@
     "typecheck": "tsc -b && tsc -p tsconfig.functions.json",
     "preview": "vite preview",
     "preview:cf": "wrangler pages dev",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply DB --local",
+    "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "deploy": "pnpm run build && wrangler pages deploy"
   },
   "dependencies": {
@@ -23,7 +26,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "drizzle-orm": "^0.45.2",
     "fflate": "^0.8.3",
+    "hono": "^4.12.25",
     "lucide-react": "^1.17.0",
     "radix-ui": "^1.5.0",
     "react": "^19.2.6",
@@ -40,6 +45,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "drizzle-kit": "^0.31.10",
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",

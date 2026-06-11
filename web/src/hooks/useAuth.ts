@@ -6,6 +6,7 @@ export interface User {
   name: string
   avatar_url: string
   is_admin: number
+  status?: string
 }
 
 interface AuthState {
@@ -29,11 +30,37 @@ export function useAuth() {
     window.location.href = '/api/auth/github'
   }
 
+  const loginWithPassword = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = (await res.json()) as { error?: string }
+    if (!res.ok) {
+      throw new Error(data.error || 'Login failed')
+    }
+    window.location.href = '/mirrors'
+  }
+
+  const register = async (email: string, password: string) => {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = (await res.json()) as { error?: string; status?: string }
+    if (!res.ok) {
+      throw new Error(data.error || 'Registration failed')
+    }
+    return data.status || 'pending'
+  }
+
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' })
     setState({ user: null, loading: false })
     window.location.href = '/'
   }
 
-  return { ...state, login, logout }
+  return { ...state, login, loginWithPassword, register, logout }
 }
