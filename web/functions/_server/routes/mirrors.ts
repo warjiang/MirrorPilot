@@ -76,7 +76,7 @@ export const getConfigHandler = async (c: Context<AppEnv>) => {
     db
       .select(imageSelection)
       .from(images)
-      .where(eq(images.userId, userId))
+      .where(and(eq(images.userId, userId), eq(images.isCacheEntry, 0)))
       .orderBy(asc(sql`rowid`)),
   ])
 
@@ -124,7 +124,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
       createdAt: images.createdAt,
     })
     .from(images)
-    .where(eq(images.userId, userId))
+    .where(and(eq(images.userId, userId), eq(images.isCacheEntry, 0)))
 
   const existingImageIds = new Set(existingImageRows.map((row) => row.id))
   const keptImageIds = new Set<number>()
@@ -148,6 +148,14 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   const statements: BatchItem<'sqlite'>[] = [
     db.delete(profiles).where(eq(profiles.userId, userId)),
   ]
+
+  // Load cache entries to skip sync for already-synced images
+  const cacheRows = await db
+    .select({ source: images.source, profile: images.profile, syncedAt: images.syncedAt })
+    .from(images)
+    .where(and(eq(images.userId, userId), eq(images.isCacheEntry, 1), eq(images.status, 'synced')))
+  const cacheSet = new Set(cacheRows.map((r) => `${r.profile}\0${r.source}`))
+  const cacheSyncedAt = new Map(cacheRows.map((r) => [`${r.profile}\0${r.source}`, r.syncedAt]))
 
   for (const [name, p] of profileEntries) {
     statements.push(
@@ -212,6 +220,10 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
       continue
     }
 
+    // Check if cache has a synced record for this image
+    const cacheKey = `${img.profile ?? 'default'}\0${img.source}`
+    const cacheHit = cacheSet.has(cacheKey)
+
     statements.push(
       db.insert(images).values({
         userId,
@@ -220,12 +232,12 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
         profile: img.profile ?? 'default',
         enabled: img.enabled !== false ? 1 : 0,
         pinned: img.pinned ? 1 : 0,
-        synced: img.synced ? 1 : 0,
-        status: img.status ?? (img.synced ? 'synced' : 'pending'),
+        synced: cacheHit ? 1 : (img.synced ? 1 : 0),
+        status: cacheHit ? 'synced' : (img.status ?? (img.synced ? 'synced' : 'pending')),
         syncError: img.syncError ?? '',
         notes: img.notes ?? '',
         createdAt: img.createdAt ?? new Date().toISOString(),
-        syncedAt: img.syncedAt ?? null,
+        syncedAt: cacheHit ? (cacheSyncedAt.get(cacheKey) ?? null) : (img.syncedAt ?? null),
       })
     )
   }
@@ -233,7 +245,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   const removedIds = [...existingImageIds].filter((id) => !keptImageIds.has(id))
   if (removedIds.length) {
     statements.push(
-      db.delete(images).where(and(eq(images.userId, userId), inArray(images.id, removedIds)))
+      db.delete(images).where(and(eq(images.userId, userId), eq(images.isCacheEntry, 0), inArray(images.id, removedIds)))
     )
   }
 
@@ -297,6 +309,7 @@ mirrorsRoutes.get('/search', async (c) => {
   const where = q
     ? and(
         eq(images.userId, userId),
+        eq(images.isCacheEntry, 0),
         or(
           like(images.source, pattern),
           like(images.target, pattern),
@@ -304,7 +317,7 @@ mirrorsRoutes.get('/search', async (c) => {
           like(images.notes, pattern)
         )
       )
-    : eq(images.userId, userId)
+    : and(eq(images.userId, userId), eq(images.isCacheEntry, 0))
 
   const countRows = await db
     .select({ total: sql<number>`COUNT(*)` })

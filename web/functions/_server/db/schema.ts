@@ -106,8 +106,12 @@ export const images = sqliteTable(
     status: text('status').notNull().default('pending'),
     syncError: text('sync_error').notNull().default(''),
     syncRunId: text('sync_run_id').notNull().default(''),
+    isCacheEntry: integer('is_cache_entry').notNull().default(0),
   },
-  (t) => [index('idx_images_user').on(t.userId)]
+  (t) => [
+    index('idx_images_user').on(t.userId),
+    index('idx_images_cache').on(t.userId, t.profile, t.source, t.isCacheEntry),
+  ]
 )
 
 export const jobs = sqliteTable(

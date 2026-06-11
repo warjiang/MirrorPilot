@@ -70,6 +70,44 @@ syncRoutes.post('/complete', async (c) => {
           .where(eq(images.id, result.image_id))
   )
 
+  // Create/update cache entries for successfully synced images
+  const successIds = body.results.filter((r) => r.success).map((r) => r.image_id)
+  if (successIds.length) {
+    const syncedRows = await db
+      .select({ id: images.id, userId: images.userId, source: images.source, target: images.target, profile: images.profile })
+      .from(images)
+      .where(inArray(images.id, successIds))
+
+    for (const row of syncedRows) {
+      // Upsert: check if cache entry exists, if not insert one
+      const existing = await db
+        .select({ id: images.id })
+        .from(images)
+        .where(and(eq(images.userId, row.userId), eq(images.profile, row.profile), eq(images.source, row.source), eq(images.isCacheEntry, 1)))
+        .limit(1)
+
+      if (existing.length) {
+        statements.push(
+          db.update(images).set({ syncedAt: sql`datetime('now')`, target: row.target }).where(eq(images.id, existing[0].id))
+        )
+      } else {
+        statements.push(
+          db.insert(images).values({
+            userId: row.userId,
+            source: row.source,
+            target: row.target,
+            profile: row.profile,
+            enabled: 0,
+            synced: 1,
+            status: 'synced',
+            syncedAt: sql`datetime('now')`,
+            isCacheEntry: 1,
+          })
+        )
+      }
+    }
+  }
+
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
   return c.json({ ok: true, processed: body.results.length })
 })
@@ -126,9 +164,11 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
   const statements: BatchItem<'sqlite'>[] = []
   let success = 0
   let failed = 0
+  const successImageIds: number[] = []
   for (const ev of body.events) {
     if (ev.success) {
       success++
+      successImageIds.push(ev.image_id)
       statements.push(
         db
           .update(jobItems)
@@ -158,6 +198,43 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
       )
     }
   }
+
+  // Create/update cache entries for successfully synced images
+  if (successImageIds.length) {
+    const syncedRows = await db
+      .select({ id: images.id, userId: images.userId, source: images.source, target: images.target, profile: images.profile })
+      .from(images)
+      .where(inArray(images.id, successImageIds))
+
+    for (const row of syncedRows) {
+      const existing = await db
+        .select({ id: images.id })
+        .from(images)
+        .where(and(eq(images.userId, row.userId), eq(images.profile, row.profile), eq(images.source, row.source), eq(images.isCacheEntry, 1)))
+        .limit(1)
+
+      if (existing.length) {
+        statements.push(
+          db.update(images).set({ syncedAt: sql`datetime('now')`, target: row.target }).where(eq(images.id, existing[0].id))
+        )
+      } else {
+        statements.push(
+          db.insert(images).values({
+            userId: row.userId,
+            source: row.source,
+            target: row.target,
+            profile: row.profile,
+            enabled: 0,
+            synced: 1,
+            status: 'synced',
+            syncedAt: sql`datetime('now')`,
+            isCacheEntry: 1,
+          })
+        )
+      }
+    }
+  }
+
   statements.push(
     db
       .update(jobs)
@@ -291,6 +368,7 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
       and(
         eq(images.userId, userId),
         eq(images.enabled, 1),
+        eq(images.isCacheEntry, 0),
         notInArray(images.status, ['synced', 'syncing'])
       )
     )
