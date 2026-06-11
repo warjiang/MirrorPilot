@@ -167,11 +167,6 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
   const handledCompletedRunIdRef = useRef<number | null>(null)
 
   useEffect(() => {
-    if (profileNames.includes(form.profile)) return
-    setForm((f) => ({ ...f, profile: profileNames[0] ?? 'default' }))
-  }, [profileNames, form.profile])
-
-  useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape' && formOpen) {
         cancelForm()
@@ -308,10 +303,11 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
     if (tgtErr) { setFormError(`Target: ${tgtErr}`); return }
 
     const now = new Date().toISOString()
+    const selectedProfile = profileNames.includes(form.profile) ? form.profile : (profileNames[0] ?? 'default')
     const entry: ImageEntry = {
       source: form.source.trim(),
       target: finalTarget,
-      profile: form.profile,
+      profile: selectedProfile,
       enabled: true,
       status: 'pending',
       createdAt: now,
@@ -451,6 +447,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
   const effectiveTarget = form.targetTouched && form.target.trim()
     ? form.target
     : form.source.trim() ? deriveTarget(form.source) : ''
+  const selectedProfile = profileNames.includes(form.profile) ? form.profile : (profileNames[0] ?? 'default')
 
   return (
     <Card>
@@ -525,7 +522,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Profile</Label>
-                <Select value={form.profile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
+                <Select value={selectedProfile} onValueChange={(v) => setForm((f) => ({ ...f, profile: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {profileNames.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
