@@ -121,7 +121,19 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
 }
 
 export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) {
-  const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
+  const profileNames = useMemo(() => {
+    const set = new Set<string>()
+    for (const name of Object.keys(config.profiles)) {
+      const trimmed = name.trim()
+      if (trimmed) set.add(trimmed)
+    }
+    for (const img of config.images) {
+      const trimmed = (img.profile || '').trim()
+      if (trimmed) set.add(trimmed)
+    }
+    if (set.size === 0) set.add('default')
+    return [...set].sort((a, b) => a.localeCompare(b))
+  }, [config.profiles, config.images])
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<FormState>({
     source: '', target: '', targetTouched: false,
@@ -153,6 +165,11 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
   const [refreshingNow, setRefreshingNow] = useState(false)
   const [latestRun, setLatestRun] = useState<{ id: number; status: string; conclusion: string | null; url: string } | null>(null)
   const handledCompletedRunIdRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (profileNames.includes(form.profile)) return
+    setForm((f) => ({ ...f, profile: profileNames[0] ?? 'default' }))
+  }, [profileNames, form.profile])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
