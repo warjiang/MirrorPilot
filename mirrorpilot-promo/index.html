@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=1080, height=1920">
+  <title>MirrorPilot 宣传片</title>
+  <style>
+    @font-face {
+      font-family: 'Space Grotesk';
+      src: local('Space Grotesk');
+      font-weight: 100 900;
+    }
+    @font-face {
+      font-family: 'JetBrains Mono';
+      src: local('JetBrains Mono');
+      font-weight: 100 900;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ===== GLOBAL: clip + scene wrappers ===== */
+    .clip {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+    .scene {
+      position: absolute;
+      inset: 0;
+      background: #0D1B2A;
+      font-family: 'Space Grotesk', system-ui, sans-serif;
+      color: #E0E1DD;
+    }
+
+    /* ==================== SCENE 1: HOOK ==================== */
+    .scene-hook .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 120px 80px;
+      gap: 40px;
+    }
+
+    .scene-hook .bg-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(65, 90, 119, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(65, 90, 119, 0.06) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
+
+    .scene-hook .danger-glow {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(231, 29, 54, 0.14) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    .scene-hook .terminal {
+      background: rgba(13, 27, 42, 0.95);
+      border: 2px solid #415A77;
+      border-radius: 12px;
+      padding: 32px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 26px;
+      line-height: 1.8;
+    }
+
+    .scene-hook .terminal-header {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .scene-hook .terminal-dot {
+      width: 14px; height: 14px; border-radius: 50%;
+    }
+    .scene-hook .terminal-dot:nth-child(1) { background: #E71D36; }
+    .scene-hook .terminal-dot:nth-child(2) { background: #FF9F1C; }
+    .scene-hook .terminal-dot:nth-child(3) { background: #2EC4B6; }
+
+    .scene-hook .cmd { color: #778DA9; }
+    .scene-hook .error { color: #E71D36; }
+
+    .scene-hook .hook-text {
+      font-size: 72px;
+      font-weight: 800;
+      line-height: 1.2;
+      letter-spacing: -0.03em;
+    }
+
+    .scene-hook .progress-bar {
+      height: 6px;
+      background: rgba(65, 90, 119, 0.3);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .scene-hook .progress-fill {
+      width: 30%;
+      height: 100%;
+      background: #E71D36;
+      border-radius: 3px;
+    }
+
+    .scene-hook .reg-marks {
+      position: absolute;
+      top: 60px; left: 60px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      color: rgba(119, 141, 169, 0.4);
+    }
+    .scene-hook .timestamp-label {
+      position: absolute;
+      bottom: 60px; right: 60px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 18px;
+      color: rgba(119, 141, 169, 0.4);
+    }
+
+    /* ==================== SCENE 2: PUNCH ==================== */
+    .scene-punch .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 120px 80px;
+      gap: 32px;
+    }
+
+    .scene-punch .brand-glow {
+      position: absolute;
+      width: 800px; height: 800px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(46, 196, 182, 0.15) 0%, transparent 60%);
+      border-radius: 50%;
+    }
+
+    .scene-punch .ghost-text {
+      position: absolute;
+      font-size: 280px;
+      font-weight: 900;
+      color: rgba(46, 196, 182, 0.04);
+      white-space: nowrap;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      letter-spacing: -0.05em;
+    }
+
+    .scene-punch .brand-icon {
+      width: 80px; height: 80px;
+      border: 3px solid #2EC4B6;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scene-punch .brand-icon::before {
+      content: '⟳';
+      font-size: 42px;
+      color: #2EC4B6;
+    }
+
+    .scene-punch .wordmark {
+      font-size: 96px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      text-align: center;
+    }
+
+    .scene-punch .hairline {
+      width: 200px; height: 2px;
+      background: #415A77;
+    }
+
+    .scene-punch .tagline {
+      font-size: 42px;
+      font-weight: 400;
+      color: #778DA9;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .scene-punch .version-badge {
+      position: absolute;
+      top: 60px; right: 60px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px;
+      color: rgba(119, 141, 169, 0.5);
+      border: 1px solid rgba(65, 90, 119, 0.4);
+      padding: 6px 14px;
+      border-radius: 6px;
+    }
+
+    .scene-punch .accent-dots {
+      display: flex; gap: 12px;
+    }
+    .scene-punch .accent-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #2EC4B6;
+    }
+
+    /* ==================== SCENE 3: FEATURES ==================== */
+    .scene-features .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 140px 80px;
+      gap: 48px;
+    }
+
+    .scene-features .vertical-lines {
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        0deg, transparent, transparent 119px,
+        rgba(65, 90, 119, 0.04) 119px,
+        rgba(65, 90, 119, 0.04) 120px
+      );
+    }
+
+    .scene-features .feature-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      padding: 32px;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+    .scene-features .feature-card-active {
+      border-left-color: #2EC4B6;
+    }
+
+    .scene-features .feature-icon {
+      width: 56px; height: 56px;
+      border: 2px solid #415A77;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      flex-shrink: 0;
+    }
+
+    .scene-features .feature-text {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .scene-features .feature-title {
+      font-size: 48px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .scene-features .feature-desc {
+      font-size: 28px;
+      color: #778DA9;
+    }
+    .scene-features .step-num {
+      position: absolute;
+      top: 32px; right: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      color: #2EC4B6;
+      font-weight: 600;
+    }
+    .scene-features .connector {
+      width: 3px; height: 48px;
+      background: rgba(65, 90, 119, 0.3);
+      margin-left: 110px;
+    }
+
+    /* ==================== SCENE 4: PROOF ==================== */
+    .scene-proof .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 200px 80px;
+      gap: 100px;
+    }
+
+    .scene-proof .proof-glow {
+      position: absolute;
+      width: 700px; height: 700px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(46, 196, 182, 0.12) 0%, transparent 60%);
+      border-radius: 50%;
+    }
+
+    .scene-proof .hairlines-bg {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(65, 90, 119, 0.03) 1px, transparent 1px);
+      background-size: 100% 120px;
+    }
+
+    .scene-proof .metric {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .scene-proof .metric-value {
+      font-size: 120px;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      color: #2EC4B6;
+      font-variant-numeric: tabular-nums;
+    }
+    .scene-proof .metric-label {
+      font-size: 32px;
+      color: #778DA9;
+    }
+    .scene-proof .metric-underline {
+      width: 120px; height: 2px;
+      background: #415A77;
+    }
+
+    /* ==================== SCENE 5: CTA ==================== */
+    .scene-cta .content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 200px 80px;
+      gap: 40px;
+    }
+
+    .scene-cta .cta-glow {
+      position: absolute;
+      width: 500px; height: 500px;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: radial-gradient(circle, rgba(46, 196, 182, 0.08) 0%, transparent 60%);
+      border-radius: 50%;
+    }
+
+    .scene-cta .cta-text {
+      font-size: 56px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .scene-cta .cta-url {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 36px;
+      color: #2EC4B6;
+      font-weight: 500;
+    }
+    .scene-cta .cta-rule {
+      width: 160px; height: 2px;
+      background: #415A77;
+    }
+    .scene-cta .cta-brand {
+      font-size: 32px;
+      color: #778DA9;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <div data-hf-id="hf-8u3s" data-composition-id="mirrorpilot-promo" data-start="0" data-duration="35" data-width="1080" data-height="1920">
+
+    <!-- ===== SCENE 1: HOOK (0–7s) ===== -->
+    <div data-hf-id="hf-jvr4" id="scene-1" class="clip" data-start="0" data-duration="7" data-track-index="1">
+      <div data-hf-id="hf-t114" class="scene scene-hook">
+          <div data-hf-id="hf-v631" class="bg-grid" id="s1-grid"></div>
+          <div data-hf-id="hf-odb3" class="danger-glow" id="s1-glow"></div>
+          <div data-hf-id="hf-jf1f" class="reg-marks" id="s1-reg">◻ MIR-001</div>
+          <div data-hf-id="hf-rmjv" class="timestamp-label" id="s1-time">SYS::TIMEOUT</div>
+          <div data-hf-id="hf-mcm7" class="content">
+            <div data-hf-id="hf-qjtb" class="terminal" id="s1-terminal">
+              <div data-hf-id="hf-0zlm" class="terminal-header">
+                <div data-hf-id="hf-9dg6" class="terminal-dot"></div>
+                <div data-hf-id="hf-of96" class="terminal-dot"></div>
+                <div data-hf-id="hf-otk7" class="terminal-dot"></div>
+              </div>
+              <div data-hf-id="hf-fp12" class="cmd" id="s1-cmd1">$ docker pull gcr.io/google-containers/pause:3.2</div>
+              <div data-hf-id="hf-bcfy" class="error" id="s1-err1">Error: connection timed out</div>
+              <div data-hf-id="hf-hwuu" class="cmd" id="s1-cmd2">$ docker pull k8s.gcr.io/kube-proxy:v1.28.0</div>
+              <div data-hf-id="hf-3sar" class="error" id="s1-err2">Error: TLS handshake timeout</div>
+              <div data-hf-id="hf-fzij" class="cmd" id="s1-cmd3">$ docker pull ghcr.io/fluxcd/flux:v2.1.0</div>
+              <div data-hf-id="hf-2wvl" class="error" id="s1-err3">Error: 403 Forbidden</div>
+            </div>
+            <div data-hf-id="hf-a2jd" class="progress-bar" id="s1-progress">
+              <div data-hf-id="hf-7zyx" class="progress-fill" id="s1-progress-fill"></div>
+            </div>
+            <div data-hf-id="hf-ut8b" class="hook-text" id="s1-hook">镜像拉取失败？<br data-hf-id="hf-x5px">网络超时？</div>
+          </div>
+        </div>
+    </div>
+
+    <!-- ===== SCENE 2: PUNCH (7–15s) ===== -->
+    <div data-hf-id="hf-8o5t" id="scene-2" class="clip" data-start="7" data-duration="8" data-track-index="1">
+      <div data-hf-id="hf-ccwr" class="scene scene-punch">
+        <div data-hf-id="hf-o26k" class="brand-glow" id="s2-glow"></div>
+        <div data-hf-id="hf-q6lb" class="ghost-text" id="s2-ghost" data-layout-allow-overflow="">MIRROR</div>
+        <div data-hf-id="hf-a8zf" class="version-badge" id="s2-version">v1.0</div>
+        <div data-hf-id="hf-i7rz" class="content">
+          <div data-hf-id="hf-4zbk" class="brand-icon" id="s2-icon"></div>
+          <div data-hf-id="hf-nf5b" class="wordmark" id="s2-wordmark">MirrorPilot</div>
+          <div data-hf-id="hf-tc9a" class="hairline" id="s2-hairline"></div>
+          <div data-hf-id="hf-uo74" class="tagline" id="s2-tagline">一站式容器镜像同步方案</div>
+          <div data-hf-id="hf-7ozj" class="accent-dots" id="s2-dots">
+            <div data-hf-id="hf-4gwk" class="accent-dot" id="s2-dot1"></div>
+            <div data-hf-id="hf-fce7" class="accent-dot" id="s2-dot2"></div>
+            <div data-hf-id="hf-bea6" class="accent-dot" id="s2-dot3"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCENE 3: FEATURES (15–25s) ===== -->
+    <div data-hf-id="hf-d6vq" id="scene-3" class="clip" data-start="15" data-duration="10" data-track-index="1">
+      <div data-hf-id="hf-i2mg" class="scene scene-features">
+        <div data-hf-id="hf-nxmi" class="vertical-lines" id="s3-lines"></div>
+        <div data-hf-id="hf-htgy" class="content">
+          <div data-hf-id="hf-dybd" class="feature-card feature-card-active" id="s3-card1">
+            <div data-hf-id="hf-e6ps" class="feature-icon">📋</div>
+            <div data-hf-id="hf-l0c6" class="feature-text">
+              <div data-hf-id="hf-qmqh" class="feature-title">声明式配置</div>
+              <div data-hf-id="hf-m50w" class="feature-desc">YAML 声明，自动执行</div>
+            </div>
+            <div data-hf-id="hf-pfme" class="step-num">01</div>
+          </div>
+          <div data-hf-id="hf-9fut" class="connector" id="s3-conn1"></div>
+          <div data-hf-id="hf-29a6" class="feature-card" id="s3-card2">
+            <div data-hf-id="hf-zvbx" class="feature-icon">🔄</div>
+            <div data-hf-id="hf-h5ju" class="feature-text">
+              <div data-hf-id="hf-1ay2" class="feature-title">自动同步</div>
+              <div data-hf-id="hf-eeit" class="feature-desc">GitHub Actions 持续同步</div>
+            </div>
+            <div data-hf-id="hf-ptxf" class="step-num">02</div>
+          </div>
+          <div data-hf-id="hf-flkm" class="connector" id="s3-conn2"></div>
+          <div data-hf-id="hf-67e7" class="feature-card" id="s3-card3">
+            <div data-hf-id="hf-dser" class="feature-icon">📊</div>
+            <div data-hf-id="hf-hjuv" class="feature-text">
+              <div data-hf-id="hf-weaf" class="feature-title">实时监控</div>
+              <div data-hf-id="hf-ux73" class="feature-desc">Web 界面，状态一目了然</div>
+            </div>
+            <div data-hf-id="hf-q88g" class="step-num">03</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCENE 4: PROOF (25–30s) ===== -->
+    <div data-hf-id="hf-jz4a" id="scene-4" class="clip" data-start="25" data-duration="5" data-track-index="1">
+      <div data-hf-id="hf-chy5" class="scene scene-proof">
+        <div data-hf-id="hf-wnpv" class="proof-glow" id="s4-glow"></div>
+        <div data-hf-id="hf-6aeu" class="hairlines-bg" id="s4-hairlines"></div>
+        <div data-hf-id="hf-hf5x" class="content">
+          <div data-hf-id="hf-vdqp" class="metric" id="s4-metric1">
+            <div data-hf-id="hf-eieg" class="metric-value" id="s4-val1">99.9%</div>
+            <div data-hf-id="hf-ddjk" class="metric-label">同步成功率</div>
+            <div data-hf-id="hf-h2zc" class="metric-underline" id="s4-line1"></div>
+          </div>
+          <div data-hf-id="hf-1jgi" class="metric" id="s4-metric2">
+            <div data-hf-id="hf-q8uq" class="metric-value" id="s4-val2">200+</div>
+            <div data-hf-id="hf-1fmw" class="metric-label">支持镜像</div>
+            <div data-hf-id="hf-pqv7" class="metric-underline" id="s4-line2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SCENE 5: CTA (30–35s) ===== -->
+    <div data-hf-id="hf-tvax" id="scene-5" class="clip" data-start="30" data-duration="5" data-track-index="1">
+      <div data-hf-id="hf-im0p" class="scene scene-cta">
+        <div data-hf-id="hf-r8ww" class="cta-glow" id="s5-glow"></div>
+        <div data-hf-id="hf-k7b4" class="content">
+          <div data-hf-id="hf-4mk4" class="cta-text" id="s5-cta">立即体验</div>
+          <div data-hf-id="hf-6dvj" class="cta-url" id="s5-url">mirrorpilot.20220625.xyz</div>
+          <div data-hf-id="hf-m25a" class="cta-rule" id="s5-rule"></div>
+          <div data-hf-id="hf-urur" class="cta-brand" id="s5-brand">MirrorPilot</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== AUDIO: Background Music ===== -->
+    <audio data-hf-id="hf-wimb" id="bgm" class="clip" data-start="0" data-duration="35" data-track-index="2" src="bgm.wav" data-volume="1"></audio>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    // ==================== SCENE 1: HOOK (0–7s) ====================
+    const S1 = 0;
+
+    // BG elements
+    tl.fromTo("#s1-grid", { opacity: 0 }, { opacity: 1, duration: 0.5 }, S1 + 0.1);
+    tl.fromTo("#s1-glow", { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.8, ease: "power2.out" }, S1 + 0.1);
+    tl.fromTo("#s1-reg", { opacity: 0 }, { opacity: 1, duration: 0.3 }, S1 + 0.2);
+
+    // Danger glow pulse (ambient — starts after entrance ends at 0.9s)
+    tl.to("#s1-glow", { scale: 1.08, opacity: 0.8, duration: 1.5, yoyo: true, repeat: 3, ease: "sine.inOut" }, S1 + 1.0);
+
+    // Terminal slides in
+    tl.fromTo("#s1-terminal", { y: 80, opacity: 0, rotation: -2 }, { y: 0, opacity: 1, rotation: 0, duration: 0.6, ease: "power3.out" }, S1 + 0.3);
+
+    // Commands + errors type on staggered
+    tl.fromTo("#s1-cmd1", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, S1 + 0.8);
+    tl.fromTo("#s1-err1", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power2.out" }, S1 + 1.3);
+    tl.fromTo("#s1-cmd2", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "expo.out" }, S1 + 1.8);
+    tl.fromTo("#s1-err2", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "expo.out" }, S1 + 2.3);
+    tl.fromTo("#s1-cmd3", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power3.out" }, S1 + 2.8);
+    tl.fromTo("#s1-err3", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.3, ease: "power3.out" }, S1 + 3.3);
+
+    // Progress bar
+    tl.fromTo("#s1-progress", { opacity: 0 }, { opacity: 1, duration: 0.3 }, S1 + 3.8);
+    tl.fromTo("#s1-progress-fill",
+      { scaleX: 0, transformOrigin: "left" },
+      { scaleX: 1, duration: 1.5, ease: "power1.inOut", yoyo: true, repeat: 1 },
+      S1 + 4.0);
+
+    // Hook text SLAMS in
+    tl.fromTo("#s1-hook",
+      { x: -100, opacity: 0, scale: 1.05 },
+      { x: 0, opacity: 1, scale: 1, duration: 0.5, ease: "expo.out" },
+      S1 + 4.5);
+
+    // Timestamp
+    tl.fromTo("#s1-time", { opacity: 0 }, { opacity: 1, duration: 0.3 }, S1 + 5.0);
+
+    // ==================== SCENE 2: PUNCH (7–15s) ====================
+    const S2 = 7;
+
+    // Glow blooms
+    tl.fromTo("#s2-glow", { scale: 0.4, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.8, ease: "power2.out" }, S2 + 0.1);
+    // Glow ambient breathe
+    tl.to("#s2-glow", { scale: 1.05, duration: 2.5, yoyo: true, repeat: 2, ease: "sine.inOut" }, S2 + 1.0);
+
+    // Ghost text drifts
+    tl.fromTo("#s2-ghost", { x: 100, opacity: 0 }, { x: -100, opacity: 1, duration: 7, ease: "none" }, S2 + 0.2);
+
+    // Brand icon stamps in
+    tl.fromTo("#s2-icon", { scale: 1.3, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.4)" }, S2 + 0.3);
+
+    // Wordmark stamps in
+    tl.fromTo("#s2-wordmark", { scale: 1.1, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: "back.out(1.4)" }, S2 + 0.6);
+
+    // Hairline draws from center
+    tl.fromTo("#s2-hairline", { scaleX: 0, transformOrigin: "center" }, { scaleX: 1, duration: 0.4, ease: "power3.out" }, S2 + 1.0);
+
+    // Tagline floats up
+    tl.fromTo("#s2-tagline", { y: 25, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power2.out" }, S2 + 1.3);
+
+    // Version badge
+    tl.fromTo("#s2-version", { opacity: 0 }, { opacity: 1, duration: 0.3 }, S2 + 1.6);
+
+    // Accent dots stagger
+    tl.fromTo("#s2-dot1", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(2)" }, S2 + 1.8);
+    tl.fromTo("#s2-dot2", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(2)" }, S2 + 1.9);
+    tl.fromTo("#s2-dot3", { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.25, ease: "back.out(2)" }, S2 + 2.0);
+
+    // ==================== SCENE 3: FEATURES (15–25s) ====================
+    const S3 = 15;
+
+    // Vertical lines drift upward (ambient)
+    tl.fromTo("#s3-lines", { y: 0, opacity: 0 }, { y: -60, opacity: 1, duration: 9, ease: "none" }, S3 + 0.1);
+
+    // Card 1 slides in
+    tl.fromTo("#s3-card1", { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, S3 + 0.3);
+    // Connector 1 draws
+    tl.fromTo("#s3-conn1", { scaleY: 0, transformOrigin: "top" }, { scaleY: 1, duration: 0.4, ease: "power2.out" }, S3 + 1.2);
+    // Card 2
+    tl.fromTo("#s3-card2", { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "expo.out" }, S3 + 1.8);
+    // Connector 2
+    tl.fromTo("#s3-conn2", { scaleY: 0, transformOrigin: "top" }, { scaleY: 1, duration: 0.4, ease: "power2.out" }, S3 + 2.7);
+    // Card 3
+    tl.fromTo("#s3-card3", { x: -60, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: "power3.out" }, S3 + 3.3);
+
+    // ==================== SCENE 4: PROOF (25–30s) ====================
+    const S4 = 25;
+
+    // Glow breathes
+    tl.fromTo("#s4-glow", { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power2.out" }, S4 + 0.1);
+    tl.to("#s4-glow", { scale: 1.03, duration: 2, yoyo: true, repeat: 1, ease: "sine.inOut" }, S4 + 0.8);
+
+    // Metric 1
+    tl.fromTo("#s4-val1", { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "expo.out" }, S4 + 0.3);
+    tl.fromTo("#s4-metric1 .metric-label", { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" }, S4 + 0.8);
+    tl.fromTo("#s4-line1", { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, duration: 0.3, ease: "power3.out" }, S4 + 1.0);
+
+    // Metric 2
+    tl.fromTo("#s4-val2", { scale: 0.8, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.7, ease: "expo.out" }, S4 + 1.2);
+    tl.fromTo("#s4-metric2 .metric-label", { y: 15, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power2.out" }, S4 + 1.6);
+    tl.fromTo("#s4-line2", { scaleX: 0, transformOrigin: "left" }, { scaleX: 1, duration: 0.3, ease: "power3.out" }, S4 + 1.8);
+
+    // ==================== SCENE 5: CTA (30–35s) ====================
+    const S5 = 30;
+
+    // Glow fades in
+    tl.fromTo("#s5-glow", { opacity: 0 }, { opacity: 1, duration: 0.4 }, S5 + 0.1);
+
+    // "立即体验" floats in
+    tl.fromTo("#s5-cta", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, S5 + 0.3);
+
+    // URL appears
+    tl.fromTo("#s5-url", { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.6, ease: "power2.out" }, S5 + 0.8);
+
+    // Rule draws from center
+    tl.fromTo("#s5-rule", { scaleX: 0, transformOrigin: "center" }, { scaleX: 1, duration: 0.3, ease: "power3.out" }, S5 + 1.5);
+
+    // Brand fades in
+    tl.fromTo("#s5-brand", { opacity: 0 }, { opacity: 1, duration: 0.4, ease: "power2.out" }, S5 + 1.8);
+
+    // Final fade out (last scene — exit animations allowed)
+    tl.to("#s5-cta",   { opacity: 0, duration: 0.6 }, S5 + 3.8);
+    tl.to("#s5-url",   { opacity: 0, duration: 0.6 }, S5 + 3.9);
+    tl.to("#s5-rule",  { opacity: 0, duration: 0.5 }, S5 + 4.0);
+    tl.to("#s5-brand", { opacity: 0, duration: 0.5 }, S5 + 4.0);
+    tl.to("#s5-glow",  { opacity: 0, duration: 0.8 }, S5 + 4.0);
+
+    window.__timelines["mirrorpilot-promo"] = tl;
+  </script>
+</body>
+</html>
