@@ -232,7 +232,14 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
     setPage(1)
     setSearchResult((prev) => ({ ...prev, loading: true, error: null }))
     if (sortField === field) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      if (sortDir === 'desc') {
+        setSortDir('asc')
+      } else {
+        // Third click: back to the default priority ordering
+        // (pending+enabled first, then syncing, then the rest)
+        setSortField(null)
+        setSortDir('desc')
+      }
     } else {
       setSortField(field)
       setSortDir('desc')
@@ -294,8 +301,20 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
       notes: form.notes.trim() || undefined,
     }
     setConfig((c) => ({ ...c, images: [...c.images, entry] }))
+    // Back to the default priority ordering so the new pending image is on top
+    setSortField(null)
+    setSortDir('desc')
     setPage(1)
-    setListNonce((n) => n + 1)
+    // Optimistically show the new entry at the top of the list right away.
+    // The lastSavedAt-driven refresh replaces it with the authoritative row
+    // (with its server-assigned id) once the save lands.
+    if (!trimmedSearchQuery) {
+      setSearchResult((prev) => ({
+        ...prev,
+        total: prev.total + 1,
+        items: [entry, ...prev.items],
+      }))
+    }
     toast(`Added ${form.source.trim()}`)
     cancelForm()
   }
