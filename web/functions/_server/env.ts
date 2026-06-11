@@ -5,6 +5,9 @@ export interface Env {
   GITHUB_TOKEN: string
   GITHUB_REPO: string
   SYNC_SECRET: string
+  RESEND_API_KEY: string
+  EMAIL_FROM_ADDRESS: string
+  EMAIL_FROM_NAME?: string
   DEV_USER_EMAIL?: string
   ADMIN_EMAIL?: string
 }

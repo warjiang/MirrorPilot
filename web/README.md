@@ -11,8 +11,8 @@ Runs entirely on **Cloudflare's infrastructure**:
   registry-check, and auth APIs on the Workers runtime.
 - **Cloudflare D1** (managed SQLite) stores mirror configuration, user
   accounts, and sessions.
-- **GitHub OAuth** handles authentication — users sign in with their GitHub
-  account.
+- **GitHub OAuth** handles one sign-in path, and email/password registration
+  uses a verification code sent to the registration email.
 
 ## Architecture
 
@@ -42,7 +42,7 @@ Browser
 
 ```
 Browser
-  ↕ authenticated via GitHub OAuth (mp_session cookie)
+  ↕ authenticated via GitHub OAuth or email verification (mp_session cookie)
 Cloudflare D1 (users, sessions, profiles, images)
   ↕ repository_dispatch + API callback
 GitHub Actions (skopeo sync)
@@ -54,11 +54,11 @@ immediately fetches the canonical config from D1. **Pull** re-fetches from D1;
 
 ## Authentication
 
-MirrorPilot uses **GitHub OAuth** for authentication:
+MirrorPilot supports **GitHub OAuth** and **email/password registration**:
 
-1. User clicks "Sign in with GitHub" on the landing page
-2. Redirected to GitHub for authorization
-3. On callback, a D1-backed session is created (7-day expiry, sliding window)
+1. User clicks "Sign in with GitHub" or starts email registration on the landing page
+2. GitHub users are redirected to GitHub for authorization; email users receive a verification code
+3. On callback or successful code verification, a D1-backed session is created (7-day expiry, sliding window)
 4. Session ID stored in `mp_session` HttpOnly cookie
 
 ### Setting up GitHub OAuth
@@ -139,6 +139,9 @@ Also ensure these environment variables are set in Cloudflare Pages:
 | `GITHUB_REPO` | Your repo in `owner/repo` format (e.g. `warjiang/MirrorPilot`) |
 | `SYNC_SECRET` | A random shared secret for API authentication between Actions and Pages |
 | `ADMIN_EMAIL` | (Optional) GitHub email address of the user who should have admin privileges |
+| `RESEND_API_KEY` | [Resend](https://resend.com) API key used to send registration code emails |
+| `EMAIL_FROM_ADDRESS` | Verified sender address used for registration codes |
+| `EMAIL_FROM_NAME` | Optional sender name for registration code emails |
 
 > Note: `GITHUB_REPO` is the GitHub repository identifier (for example `warjiang/MirrorPilot`), not the Cloudflare Pages project name.  
 > Cloudflare Pages project name for deploy is `mirrorpilot`.

@@ -8,6 +8,13 @@
       "when": 1781159171545,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781167322332,
+      "tag": "0001_registration_codes",
+      "breakpoints": true
     }
   ]
 }

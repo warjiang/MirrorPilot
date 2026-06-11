@@ -1,7 +1,15 @@
 import { Hono } from 'hono'
 import { eq } from 'drizzle-orm'
 import type { AppEnv } from '../types'
-import { users } from '../db/schema'
+import { registrationCodes, users } from '../db/schema'
+import {
+  buildVerificationEmail,
+  generateVerificationCode,
+  getVerificationExpiry,
+  getVerificationTtlMinutes,
+  hashVerificationCode,
+  normalizeEmail,
+} from '../lib/auth-email'
 import { hashPassword, verifyPassword } from '../lib/password'
 import {
   clearSessionCookie,
@@ -32,6 +40,9 @@ interface GitHubEmail {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const VERIFICATION_CODE_RE = /^\d{6}$/
+const MAX_VERIFICATION_ATTEMPTS = 5
+const APP_NAME = 'MirrorPilot'
 
 function isAdminEmail(email: string, adminEmail?: string): boolean {
   return adminEmail ? email.toLowerCase() === adminEmail.toLowerCase().trim() : false
@@ -52,6 +63,46 @@ function toApiUser(user: {
     avatar_url: user.avatarUrl,
     is_admin: user.isAdmin,
     status: user.status,
+  }
+}
+
+async function sendVerificationCodeEmail(c: {
+  env: AppEnv['Bindings']
+}, email: string, code: string) {
+  const fromAddress = (c.env.EMAIL_FROM_ADDRESS || '').trim()
+  if (!fromAddress) {
+    throw new Error('EMAIL_FROM_ADDRESS is required')
+  }
+  const apiKey = (c.env.RESEND_API_KEY || '').trim()
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY is required')
+  }
+
+  const fromName = c.env.EMAIL_FROM_NAME?.trim() || APP_NAME
+  const { subject, text, html } = buildVerificationEmail({
+    appName: APP_NAME,
+    email,
+    code,
+    ttlMinutes: getVerificationTtlMinutes(),
+  })
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${fromName} <${fromAddress}>`,
+      to: [email],
+      subject,
+      text,
+      html,
+    }),
+  })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Email send failed (${res.status}): ${body}`)
   }
 }
 
@@ -179,7 +230,7 @@ authRoutes.post('/register', async (c) => {
     return c.json({ error: 'Invalid JSON body' }, 400)
   }
 
-  const email = (body.email || '').toLowerCase().trim()
+  const email = normalizeEmail(body.email || '')
   const password = body.password || ''
 
   if (!EMAIL_RE.test(email)) {
@@ -190,6 +241,100 @@ authRoutes.post('/register', async (c) => {
   }
 
   const existing = await db
+    .select({ id: users.id, passwordHash: users.passwordHash })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1)
+
+  if (existing[0]?.passwordHash) {
+    return c.json({ error: 'Email already registered' }, 409)
+  }
+
+  const passwordHash = await hashPassword(password)
+  const code = generateVerificationCode()
+  const codeHash = await hashVerificationCode(email, code)
+  const expiresAt = getVerificationExpiry().toISOString()
+
+  await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+  await db.insert(registrationCodes).values({
+    email,
+    codeHash,
+    passwordHash,
+    expiresAt,
+  })
+
+  try {
+    await sendVerificationCodeEmail(c, email, code)
+  } catch (error) {
+    await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+    return c.json(
+      {
+        error:
+          error instanceof Error ? error.message : 'Failed to send verification email',
+      },
+      502
+    )
+  }
+
+  return c.json({ ok: true, status: 'verification_sent', expires_in_minutes: getVerificationTtlMinutes() })
+})
+
+authRoutes.post('/register/verify', async (c) => {
+  const db = c.get('db')
+  let body: { email?: string; code?: string }
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400)
+  }
+
+  const email = normalizeEmail(body.email || '')
+  const code = (body.code || '').trim()
+
+  if (!EMAIL_RE.test(email)) {
+    return c.json({ error: 'Invalid email address' }, 400)
+  }
+  if (!VERIFICATION_CODE_RE.test(code)) {
+    return c.json({ error: 'Invalid verification code' }, 400)
+  }
+
+  const rows = await db
+    .select({
+      id: registrationCodes.id,
+      codeHash: registrationCodes.codeHash,
+      passwordHash: registrationCodes.passwordHash,
+      expiresAt: registrationCodes.expiresAt,
+      attempts: registrationCodes.attempts,
+    })
+    .from(registrationCodes)
+    .where(eq(registrationCodes.email, email))
+    .limit(1)
+
+  const challenge = rows[0]
+  if (!challenge) {
+    return c.json({ error: 'Verification code expired' }, 410)
+  }
+
+  if (new Date(challenge.expiresAt).getTime() <= Date.now()) {
+    await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+    return c.json({ error: 'Verification code expired' }, 410)
+  }
+
+  const codeHash = await hashVerificationCode(email, code)
+  if (codeHash !== challenge.codeHash) {
+    const attempts = challenge.attempts + 1
+    if (attempts >= MAX_VERIFICATION_ATTEMPTS) {
+      await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+      return c.json({ error: 'Verification code expired' }, 410)
+    }
+    await db
+      .update(registrationCodes)
+      .set({ attempts })
+      .where(eq(registrationCodes.email, email))
+    return c.json({ error: 'Invalid verification code' }, 401)
+  }
+
+  const existing = await db
     .select({ id: users.id, passwordHash: users.passwordHash, status: users.status })
     .from(users)
     .where(eq(users.email, email))
@@ -197,24 +342,51 @@ authRoutes.post('/register', async (c) => {
 
   const isAdmin = isAdminEmail(email, c.env.ADMIN_EMAIL)
   const status = isAdmin ? 'active' : 'pending'
-  const passwordHash = await hashPassword(password)
 
   if (existing[0]) {
     if (existing[0].passwordHash) {
+      await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
       return c.json({ error: 'Email already registered' }, 409)
     }
-    // Existing OAuth user adding a password
-    await db.update(users).set({ passwordHash }).where(eq(users.id, existing[0].id))
-    return c.json({ ok: true, status: existing[0].status })
+
+    const nextStatus = isAdmin ? 'active' : existing[0].status
+    await db
+      .update(users)
+      .set({
+        passwordHash: challenge.passwordHash,
+        isAdmin: isAdmin ? 1 : 0,
+        status: nextStatus,
+      })
+      .where(eq(users.id, existing[0].id))
+    await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+    if (nextStatus === 'active') {
+      const sessionId = await createSession(db, existing[0].id)
+      return c.json(
+        { ok: true, status: nextStatus },
+        200,
+        { 'Set-Cookie': sessionCookie(sessionId) }
+      )
+    }
+    return c.json({ ok: true, status: nextStatus })
   }
 
-  await db.insert(users).values({
-    email,
-    name: email.split('@')[0],
-    passwordHash,
-    isAdmin: isAdmin ? 1 : 0,
-    status,
-  })
+  const inserted = await db
+    .insert(users)
+    .values({
+      email,
+      name: email.split('@')[0],
+      passwordHash: challenge.passwordHash,
+      isAdmin: isAdmin ? 1 : 0,
+      status,
+    })
+    .returning({ id: users.id })
+
+  await db.delete(registrationCodes).where(eq(registrationCodes.email, email))
+
+  if (status === 'active') {
+    const sessionId = await createSession(db, inserted[0].id)
+    return c.json({ ok: true, status }, 200, { 'Set-Cookie': sessionCookie(sessionId) })
+  }
 
   return c.json({ ok: true, status })
 })

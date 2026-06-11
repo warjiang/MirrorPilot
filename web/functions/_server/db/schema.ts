@@ -29,6 +29,25 @@ export const users = sqliteTable(
   ]
 )
 
+export const registrationCodes = sqliteTable(
+  'registration_codes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    email: text('email').notNull(),
+    codeHash: text('code_hash').notNull(),
+    passwordHash: text('password_hash').notNull(),
+    expiresAt: text('expires_at').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    uniqueIndex('registration_codes_email_unique').on(t.email),
+    index('idx_registration_codes_expires').on(t.expiresAt),
+  ]
+)
+
 export const sessions = sqliteTable(
   'sessions',
   {
