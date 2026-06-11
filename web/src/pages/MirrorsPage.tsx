@@ -47,6 +47,7 @@ interface Props {
   config: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
   loading: boolean
+  lastSavedAt: number
 }
 
 interface FormState {
@@ -119,7 +120,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, loading }: Props) {
+export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) {
   const profileNames = useMemo(() => Object.keys(config.profiles), [config.profiles])
   const [formOpen, setFormOpen] = useState(false)
   const [form, setForm] = useState<FormState>({
@@ -133,6 +134,14 @@ export function MirrorsPage({ config, setConfig, loading }: Props) {
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
   const [listNonce, setListNonce] = useState(0)
+
+  // Refresh the list once a config save has landed on the server,
+  // so newly added images show up immediately (and in server order).
+  useEffect(() => {
+    if (!lastSavedAt) return
+    const timer = window.setTimeout(() => setListNonce((n) => n + 1), 0)
+    return () => window.clearTimeout(timer)
+  }, [lastSavedAt])
   const [searchResult, setSearchResult] = useState<{
     total: number
     items: ImageEntry[]
