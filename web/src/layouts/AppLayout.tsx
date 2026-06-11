@@ -15,12 +15,14 @@ interface Props {
 
 const navItems = [
   { to: '/mirrors', label: 'Mirrors' },
-  { to: '/profiles', label: 'Profiles' },
   { to: '/jobs', label: 'Jobs' },
-  { to: '/settings', label: 'Settings' },
 ]
 
-const adminNavItem = { to: '/admin', label: 'Admin' }
+const adminNavItems = [
+  { to: '/profiles', label: 'Profiles' },
+  { to: '/settings', label: 'Settings' },
+  { to: '/admin', label: 'Admin' },
+]
 
 export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
   const [dark, setDark] = useState(() => {
@@ -44,7 +46,7 @@ export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
               <h1 className="text-lg font-semibold">MirrorPilot</h1>
             </div>
             <nav className="flex items-center gap-1">
-              {(user.is_admin ? [...navItems, adminNavItem] : navItems).map((item) => (
+              {(user.is_admin ? [...navItems, ...adminNavItems] : navItems).map((item) => (
                 <NavLink
                   key={item.to}
                   to={item.to}
