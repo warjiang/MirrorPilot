@@ -1,12 +1,21 @@
 # MirrorPilot
 
-A fork-friendly image mirror repo with:
-- a Go CLI (`mirrorpilot`) to manage staged mirror changes and remote config sync
-- GitHub Actions to run sync in CI and write back sync status
+MirrorPilot is a fork-friendly container image mirror toolkit with:
+- a Go CLI (`mirrorpilot`) for staged mirror config management
+- a Web app (`web/`) on Cloudflare Pages for mirror operations and sync triggering
+- GitHub Actions workflows for CI checks, sync jobs, and CLI releases
 
-## Quick start
+## At a glance
 
-Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues from older Go toolchains.
+| Use case | Use this |
+|---|---|
+| Manage image mappings in repo config | CLI (`mirrorpilot`) |
+| Operate mirrors from browser UI | Web app (`web/`) |
+| Run actual image sync in automation | GitHub Actions (`sync-images.yml`, `web-sync.yml`) |
+
+## 5-minute CLI quick start
+
+> Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues.
 
 1. Validate config:
 
@@ -14,30 +23,42 @@ Local `make` targets pin `GOTOOLCHAIN=go1.24.0+auto` to avoid macOS dyld issues 
 go run ./cmd/mirrorpilot validate
 ```
 
-2. Manage entries with CLI:
+2. Configure remote repo once (required before `add`, `delete`, `search`):
+
+```bash
+go run ./cmd/mirrorpilot remote set \
+  --repo-url https://github.com/<owner>/<repo>.git \
+  --ref main \
+  --config-path mirrorpilot.yaml
+```
+
+3. Stage changes and inspect status:
 
 ```bash
 go run ./cmd/mirrorpilot add --source nginx:1.27
-# or explicitly set target
-go run ./cmd/mirrorpilot add --source nginx:1.27 --target mirror/nginx:1.27
-go run ./cmd/mirrorpilot delete --source nginx:1.27
 go run ./cmd/mirrorpilot status
+go run ./cmd/mirrorpilot search
+```
+
+4. Push staged config changes to remote:
+
+```bash
 go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
 ```
 
-## Config
+## Config model
 
-Configuration resolution has only two modes:
-1. explicitly set `--config /path/to/mirrorpilot.yaml`
-2. otherwise default to `~/.mirrorpilot/mirrorpilot.yaml`
+Config resolution mode:
+1. `--config /path/to/mirrorpilot.yaml`
+2. default `~/.mirrorpilot/mirrorpilot.yaml`
 
-Default config file path: `~/.mirrorpilot/mirrorpilot.yaml`
+Minimal config example:
 
 ```yaml
 version: v1
 profiles:
   default:
-    registry: registry.cn-shanghai.aliyuncs.com/your-namespace
+    registry: registry.example.com/your-namespace
     username_env: DEST_REGISTRY_USER
     password_env: DEST_REGISTRY_PASSWORD
 remote:
@@ -49,114 +70,57 @@ images:
     target: mirror/nginx:1.27
     profile: default
     enabled: true
-    created_at: 2026-05-18T00:00:00Z
-    synced: false
-    synced_at: ""
 pending_changes: []
 synced_images: []
 ```
 
-### Multiple profiles and credentials
+Notes:
+- `add`/`delete` stage into `pending_changes`; they do not directly mutate `images`.
+- `remote push-config` applies staged changes onto latest remote config and pushes.
+- `sync` is CI-only and is blocked locally unless `CI=true`.
 
-Each profile should point to its own credential env names for your downstream sync runtime.
-
-```yaml
-profiles:
-  default:
-    registry: registry-a.example.com/team-a
-    username_env: REG_A_USER
-    password_env: REG_A_PASS
-  team_b:
-    registry: registry-b.example.com/team-b
-    username_env: REG_B_USER
-    password_env: REG_B_PASS
-images:
-  - source: nginx:1.27
-    target: mirror/nginx:1.27
-    profile: default
-  - source: redis:7
-    target: mirror/redis:7
-    profile: team_b
-```
-
-Environment variables in CI/local runtime:
+## Day-to-day CLI commands
 
 ```bash
-export REG_A_USER=xxx
-export REG_A_PASS=xxx
-export REG_B_USER=yyy
-export REG_B_PASS=yyy
-```
-
-## CLI commands
-
-- `add`: stage image mapping into `pending_changes` with `action=add` (does not directly modify `images`); when `--target` is omitted, it is derived from `--source`; `--source/--target` are validated as container image references
-- `delete` (`remove` alias): stage mapping deletion into `pending_changes` with `action=delete`
-- `status`: show local staged status (`pending_changes` / stats)
-- `search`: full-screen table TUI (`/` to enter vim-like search mode)
-- `sync`: sync images to target registry (CI only)
-- `validate`: validate config
-- `version`: print the mirrorpilot version (injected at build time by GoReleaser)
-- `remote set`: set remote repo configuration (`repo_url/ref/config_path`)
-- `remote fetch`: fetch remote image list and merge into local config (`--forced` can force local to match remote)
-- `remote check`: verify remote repo read/write readiness
-- `remote push-config`: `--dry-run` shows staged `pending_changes`; real push applies staged deletes and adds to latest remote config, then pushes
-
-`add` / `delete` (`remove`) / `search` require a configured remote repository. Configure it first with `remote set`.
-
-Default target derivation for `add --source` (when `--target` is omitted):
-- `ghcr.io/org/team/app:1.0.0` -> `team-app:1.0.0`
-- `team/app:1.0.0` -> `team/app:1.0.0`
-- `app:1.0.0` -> `app:1.0.0`
-
-`remote.ref` defaults to `main` and `remote.config_path` defaults to `mirrorpilot.yaml` when omitted.
-
-Examples:
-
-```bash
-go run ./cmd/mirrorpilot remote set --repo-url https://github.com/warjiang/MirrorPilot.git --ref main --config-path mirrorpilot.yaml
-go run ./cmd/mirrorpilot remote fetch --merge
-go run ./cmd/mirrorpilot remote fetch --merge --forced
-go run ./cmd/mirrorpilot remote check
-go run ./cmd/mirrorpilot remote push-config --branch main --message "chore: sync config"
+go run ./cmd/mirrorpilot validate
+go run ./cmd/mirrorpilot add --source redis:7 --profile default
+go run ./cmd/mirrorpilot delete --source redis:7 --profile default
 go run ./cmd/mirrorpilot status --output table
-go run ./cmd/mirrorpilot search
+go run ./cmd/mirrorpilot remote fetch --merge
+go run ./cmd/mirrorpilot remote check
+go run ./cmd/mirrorpilot remote push-config --dry-run
+go run ./cmd/mirrorpilot version
 ```
 
-## CI behavior
+## Web app
 
-- `pull_request` / `push` to `main`: `ci.yml` runs Go checks (`go vet`, `go test`, `go build`) and web checks (`pnpm run lint`, `pnpm run typecheck`, `pnpm run build`)
-- `push` to `main` on `web/**`: `deploy-pages.yml` typechecks, builds, applies D1 migrations, and deploys to Cloudflare Pages (requires `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets)
-- `push` to `main`: `sync-images.yml` validates config and runs `mirrorpilot sync`
-- `mirrorpilot sync` is CI-only; local execution is blocked unless `CI=true`
-- after successful sync, CI commits status updates back to config with `[skip ci]`
+For web setup, local development, and deployment, see:
+- `web/README.md`
+- `web/LOCAL_DEVELOPMENT.md`
+- `web/OAUTH_TROUBLESHOOTING.md`
+- `web/API_TESTING.md`
 
-## Release CLI
+## CI and release workflows
 
-### Automatic release on changes
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `ci.yml` | PRs + push to `main` | Go vet/test/build + web lint/typecheck/build |
+| `sync-images.yml` | push to `main`, manual | Validate config and run CLI sync; commit sync status with `[skip ci]` |
+| `web-sync.yml` | `repository_dispatch` (`web-sync`) | Sync images triggered by web UI job events |
+| `deploy-pages.yml` | push to `main` on `web/**` | Build web app, apply D1 migrations, deploy Pages |
+| `auto-release.yml` | push to `main` on Go/release files, manual | Compute semantic bump and publish CLI via GoReleaser |
+| `release.yml` | pushed `v*` tag | Manual tag-based CLI release via GoReleaser |
 
-`auto-release.yml` publishes a new CLI release automatically whenever source
-code changes (`**/*.go`, `go.mod`, `go.sum`, `.goreleaser.yaml`) land on `main`.
-The next version is derived from the latest `v*` tag and the commit messages
-since that tag (Conventional Commits):
-
-- `BREAKING CHANGE` / `type!:` → major bump
-- `feat:` → minor bump
-- anything else → patch bump
-
-The workflow creates and pushes the new tag, then runs GoReleaser. Add
-`[skip release]` to a commit message to opt out, or trigger it manually from the
-Actions tab (`workflow_dispatch`) with an explicit `patch`/`minor`/`major` bump.
-
-### Manual release by tag
-
-You can still cut a release by pushing a tag explicitly; `release.yml` runs
-GoReleaser for any pushed `v*` tag:
+## Build and test locally
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+make tidy
+make lint
+make test
+make build
 ```
 
-Artifacts are uploaded to GitHub Releases for Linux/macOS/Windows. Check the
-built version with `mirrorpilot version`.
+## Repo docs
+
+- `DESIGN.md`: web UI visual system and design rules
+- `PRODUCT.md`: product positioning and UX principles
