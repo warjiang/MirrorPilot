@@ -1,4 +1,5 @@
 import type { Env } from '@functions/_env'
+import { getUserId } from '../_auth'
 
 interface ImageRow {
   id: number
@@ -8,24 +9,6 @@ interface ImageRow {
   registry: string | null
   username_env: string | null
   password_env: string | null
-}
-
-async function getUserId(request: Request, env: Env): Promise<number | null> {
-  const cookie = request.headers.get('Cookie') || ''
-  const match = cookie.match(/mp_session=([^;]+)/)
-  if (match) {
-    const session = await env.DB.prepare(
-      "SELECT user_id FROM sessions WHERE id = ? AND expires_at > datetime('now')"
-    ).bind(match[1]).first<{ user_id: number }>()
-    if (session) return session.user_id
-  }
-  if (env.DEV_USER_EMAIL) {
-    const user = await env.DB.prepare(
-      'SELECT id FROM users WHERE email = ?'
-    ).bind(env.DEV_USER_EMAIL.toLowerCase().trim()).first<{ id: number }>()
-    if (user) return user.id
-  }
-  return null
 }
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
@@ -56,6 +39,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     password: row.password_env || '',
   }))
 
+  // Create job + items before dispatching so the workflow can report back
+  const jobId = crypto.randomUUID()
+  const statements: D1PreparedStatement[] = [
+    env.DB.prepare(
+      "INSERT INTO jobs (id, user_id, status, image_total) VALUES (?, ?, 'pending', ?)"
+    ).bind(jobId, userId, images.length),
+  ]
+  for (const row of result.results) {
+    const fullTarget = row.registry ? `${row.registry}/${row.target}` : row.target
+    statements.push(
+      env.DB.prepare(
+        'INSERT INTO job_items (job_id, image_id, source, target) VALUES (?, ?, ?, ?)'
+      ).bind(jobId, row.id, row.source, fullTarget)
+    )
+  }
+  await env.DB.batch(statements)
+
   const dispatchRes = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/dispatches`, {
     method: 'POST',
     headers: {
@@ -69,6 +69,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
       event_type: 'web-sync',
       client_payload: {
         user_id: userId,
+        job_id: jobId,
         images,
       },
     }),
@@ -76,15 +77,23 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 
   if (!dispatchRes.ok) {
     const text = await dispatchRes.text()
+    await env.DB.prepare(
+      "UPDATE jobs SET status = 'failed', error = ?, finished_at = datetime('now') WHERE id = ?"
+    ).bind(`GitHub dispatch failed: ${text}`, jobId).run()
     return Response.json({ ok: false, message: `GitHub dispatch failed: ${text}` }, { status: 502 })
   }
 
-  // Mark images as syncing
+  // Mark images as syncing and job as dispatched
   const imageIds = images.map((img) => img.id)
   const placeholders = imageIds.map(() => '?').join(',')
-  await env.DB.prepare(
-    `UPDATE images SET status = 'syncing' WHERE id IN (${placeholders})`
-  ).bind(...imageIds).run()
+  await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE images SET status = 'syncing' WHERE id IN (${placeholders})`
+    ).bind(...imageIds),
+    env.DB.prepare(
+      "UPDATE jobs SET status = 'dispatched' WHERE id = ?"
+    ).bind(jobId),
+  ])
 
-  return Response.json({ ok: true, count: images.length })
+  return Response.json({ ok: true, count: images.length, jobId })
 }

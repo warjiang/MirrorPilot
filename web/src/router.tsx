@@ -2,6 +2,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/layouts/AppLayout'
 import { LandingPage } from '@/pages/LandingPage'
 import { MirrorsPage } from '@/pages/MirrorsPage'
+import { JobsPage } from '@/pages/JobsPage'
 import { ProfilesPage } from '@/pages/ProfilesPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { AuthGuard } from '@/components/AuthGuard'
@@ -43,6 +44,7 @@ export function AppRouter() {
               />
             }
           />
+          <Route path="jobs" element={<JobsPage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Routes>
