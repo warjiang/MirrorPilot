@@ -37,6 +37,8 @@ import {
   type SyncJob,
   type SyncJobItem,
 } from '@/lib/api'
+import { useAuth } from '@/hooks/useAuth'
+import { formatLogHtml } from '@/lib/logs'
 import { cn } from '@/lib/utils'
 
 const ACTIVE_STATUSES = ['pending', 'dispatched', 'running']
@@ -106,10 +108,12 @@ function formatDuration(job: SyncJob): string {
 
 function JobDetailDialog({
   jobId,
+  isAdmin,
   onClose,
   onCancelled,
 }: {
   jobId: string
+  isAdmin: boolean
   onClose: () => void
   onCancelled: () => void
 }) {
@@ -193,7 +197,7 @@ function JobDetailDialog({
                   {job.image_failed > 0 && `, ${job.image_failed} failed`}
                 </span>
                 <span>· {formatDuration(job)}</span>
-                {job.run_url && (
+                {isAdmin && job.run_url && (
                   <a
                     href={job.run_url}
                     target="_blank"
@@ -291,7 +295,7 @@ function JobDetailDialog({
                 <div className="flex flex-col gap-2">
                   <p className="text-sm text-muted-foreground">
                     Workflow is still running — full logs will be available when it finishes.
-                    {logs.run_url && (
+                    {isAdmin && logs.run_url && (
                       <>
                         {' '}
                         <a href={logs.run_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
@@ -335,7 +339,7 @@ function JobDetailDialog({
               {logs && !logs.available && !logs.running && (
                 <p className="text-sm text-muted-foreground">
                   {logs.reason || 'Logs are not available.'}
-                  {logs.run_url && (
+                  {isAdmin && logs.run_url && (
                     <>
                       {' '}
                       <a href={logs.run_url} target="_blank" rel="noreferrer" className="underline underline-offset-2">
@@ -349,9 +353,10 @@ function JobDetailDialog({
                 (logs.logs || []).map((file) => (
                   <div key={file.name} className="flex flex-col gap-1">
                     <h4 className="text-sm font-medium">{file.name}</h4>
-                    <pre className="bg-secondary/50 max-h-[400px] overflow-auto rounded-md p-3 text-[11px] leading-relaxed whitespace-pre-wrap">
-                      {file.content}
-                    </pre>
+                    <pre
+                      className="ansi-log bg-secondary/50 max-h-[400px] overflow-auto rounded-md p-3 text-[11px] leading-relaxed whitespace-pre-wrap"
+                      dangerouslySetInnerHTML={{ __html: formatLogHtml(file.content) }}
+                    />
                   </div>
                 ))}
             </div>
@@ -363,6 +368,7 @@ function JobDetailDialog({
 }
 
 export function JobsPage() {
+  const { user } = useAuth()
   const [jobs, setJobs] = useState<SyncJob[]>([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
@@ -539,6 +545,7 @@ export function JobsPage() {
       {selectedJobId && (
         <JobDetailDialog
           jobId={selectedJobId}
+          isAdmin={user?.is_admin === 1}
           onClose={() => setSelectedJobId(null)}
           onCancelled={() => void refresh()}
         />
