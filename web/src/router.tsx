@@ -10,7 +10,7 @@ import { RequireAdmin } from '@/components/RequireAdmin'
 import { useCloudflareStorage } from '@/hooks/useCloudflareStorage'
 
 export function AppRouter() {
-  const { config, setConfig, loading, syncing, error, lastSavedAt } =
+  const { config, savedConfig, setConfig, loading, syncing, error, load, lastSavedAt } =
     useCloudflareStorage()
 
   return (
@@ -34,7 +34,16 @@ export function AppRouter() {
         >
           <Route
             path="images"
-            element={<ImagesPage config={config} setConfig={setConfig} loading={loading} lastSavedAt={lastSavedAt} />}
+            element={
+              <ImagesPage
+                config={config}
+                savedConfig={savedConfig}
+                setConfig={setConfig}
+                reloadFromServer={load}
+                loading={loading}
+                lastSavedAt={lastSavedAt}
+              />
+            }
           />
           <Route path="mirrors" element={<Navigate to="/images" replace />} />
           <Route

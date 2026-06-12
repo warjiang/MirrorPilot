@@ -16,6 +16,8 @@ import {
 } from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
 import { githubHeaders } from '../lib/github'
+import { isV2ConfigPayload, materializeV2Config } from './images'
+import type { V2ConfigPayload } from './images'
 
 export const syncRoutes = new Hono<AppEnv>()
 
@@ -458,6 +460,17 @@ ciSecretsRoutes.get('/', async (c) => {
 syncRoutes.post('/trigger', authMiddleware, async (c) => {
   const db = c.get('db')
   const userId = c.get('user').id
+  const contentType = c.req.header('content-type') || ''
+
+  if (contentType.includes('application/json')) {
+    const body = await c.req.json<{ draft?: V2ConfigPayload } | V2ConfigPayload>().catch(() => null)
+    if (body && typeof body === 'object') {
+      const draft = 'draft' in body ? body.draft : body
+      if (isV2ConfigPayload(draft)) {
+        await materializeV2Config(db, userId, draft)
+      }
+    }
+  }
 
   const uiRows = await db
     .select({

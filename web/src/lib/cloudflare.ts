@@ -57,7 +57,7 @@ interface ConfigV2ImageProfile {
   updated_at: string
 }
 
-interface ConfigV2Response {
+export interface ConfigV2Response {
   version: string
   profiles: ConfigV2Profile[]
   images: ConfigV2Image[]
@@ -133,7 +133,7 @@ function fromV2(payload: ConfigV2Response): MirrorConfig {
   }
 }
 
-function toV2(config: MirrorConfig): ConfigV2Response {
+export function toV2Payload(config: MirrorConfig): ConfigV2Response {
   const profileNames = Object.keys(config.profiles)
 
   const profiles: ConfigV2Profile[] = profileNames.map((name, i) => {
@@ -225,7 +225,7 @@ export async function saveConfig(config: MirrorConfig): Promise<void> {
   const res = await fetch('/api/config', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(toV2(config)),
+    body: JSON.stringify(toV2Payload(config)),
   })
   if (!res.ok) {
     let detail = ''
