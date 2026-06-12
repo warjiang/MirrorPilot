@@ -12,7 +12,6 @@ import {
   profiles,
   syncJobEvents,
   userImages,
-  userProfiles,
 } from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
 import { githubHeaders } from '../lib/github'
@@ -119,14 +118,6 @@ async function materializeDraftImages(db: Db, userId: number, body: V2ConfigPayl
       }
     } else {
       await db.insert(userImages).values({ userId, imageId })
-    }
-
-    // Ensure user_profiles link exists
-    for (const profileId of profileIdsByName.values()) {
-      await db
-        .insert(userProfiles)
-        .values({ userId, profileId, enabled: 1, grantedBy: userId })
-        .onConflictDoNothing()
     }
 
     // Set up image_profiles for this image
