@@ -392,16 +392,6 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
     setSortField(null)
     setSortDir('desc')
     setPage(1)
-    // Optimistically show the new entry at the top of the list right away.
-    // The lastSavedAt-driven refresh replaces it with the authoritative row
-    // (with its server-assigned id) once the save lands.
-    if (!trimmedSearchQuery) {
-      setSearchResult((prev) => ({
-        ...prev,
-        total: prev.total + 1,
-        items: [entry, ...prev.items],
-      }))
-    }
     toast(`Added ${form.source.trim()}`)
     cancelForm()
   }
