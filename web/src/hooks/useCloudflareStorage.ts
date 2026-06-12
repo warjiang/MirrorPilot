@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { loadConfig, saveConfig } from '@/lib/cloudflare'
+import { loadConfig } from '@/lib/cloudflare'
 import { emptyConfig } from '@/lib/types'
 import type { MirrorConfig } from '@/lib/types'
-import { toast } from '@/components/Toaster'
 
 const CONFIG_KEY = 'mirrorpilot.config.v2'
 
@@ -16,11 +15,11 @@ export function useCloudflareStorage() {
     }
   })
   const loading = false
+  const [savedConfig, setSavedConfig] = useState<MirrorConfig>(() => emptyConfig())
   const [error, setError] = useState<string | null>(null)
-  const [syncing, setSyncing] = useState(false)
+  const syncing = false
   const [lastSavedAt, setLastSavedAt] = useState<number>(0)
   const mountedRef = useRef(true)
-  const pendingSaveRef = useRef(false)
   const editsRef = useRef(0)
 
   // Reload config from the server (source of truth, includes server-assigned ids).
@@ -31,6 +30,8 @@ export function useCloudflareStorage() {
       const fresh = await loadConfig()
       if (mountedRef.current && editsRef.current === editsBefore) {
         setConfigState(fresh)
+        setSavedConfig(fresh)
+        setLastSavedAt(Date.now())
       }
     } catch {
       // keep local copy when the server is unreachable
@@ -48,63 +49,20 @@ export function useCloudflareStorage() {
     } catch { /* ignore */ }
   }, [config])
 
-  // Auto-save to backend when config changes (debounced via pending flag)
-  useEffect(() => {
-    if (!pendingSaveRef.current) return
-    pendingSaveRef.current = false
-    const controller = new AbortController()
-    setSyncing(true)
-    saveConfig(config)
-      .then(() => {
-        if (mountedRef.current) {
-          setLastSavedAt(Date.now())
-          toast('Config saved')
-        }
-        // Pick up server-assigned ids for newly created entries
-        void refreshFromServer()
-      })
-      .catch((e: unknown) => {
-        if (!mountedRef.current) return
-        const msg = e instanceof Error ? e.message : String(e)
-        setError(msg)
-        toast(msg, 'error')
-      })
-      .finally(() => {
-        if (mountedRef.current) setSyncing(false)
-      })
-    return () => controller.abort()
-  }, [config, refreshFromServer])
-
   useEffect(() => {
     mountedRef.current = true
     return () => { mountedRef.current = false }
   }, [])
 
   const load = useCallback(async () => {
-    return
-  }, [])
-
-  const save = useCallback(async () => {
-    setSyncing(true)
-    setError(null)
-    try {
-      await saveConfig(config)
-      setLastSavedAt(Date.now())
-      toast('Pushed config to Cloudflare')
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      setError(msg)
-      toast(msg, 'error')
-    } finally {
-      setSyncing(false)
-    }
-  }, [config])
+    await refreshFromServer()
+  }, [refreshFromServer])
 
   const setConfig = useCallback((updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => {
     editsRef.current += 1
-    pendingSaveRef.current = true
+    setError(null)
     setConfigState((prev) => typeof updater === 'function' ? updater(prev) : updater)
   }, [])
 
-  return { config, setConfig, loading, syncing, error, load, save, lastSavedAt }
+  return { config, savedConfig, setConfig, loading, syncing, error, load, lastSavedAt }
 }

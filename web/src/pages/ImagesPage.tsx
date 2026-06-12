@@ -45,7 +45,9 @@ import { searchImages } from '@/lib/cloudflare'
 
 interface Props {
   config: MirrorConfig
+  savedConfig: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
+  reloadFromServer: () => Promise<void>
   loading: boolean
   lastSavedAt: number
 }
@@ -61,7 +63,19 @@ interface FormState {
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 type ImageSyncStatus = NonNullable<ImageEntry['status']>
+type DraftChangeType = 'new' | 'updated' | 'deleted'
 const PAGE_SIZE = 20
+
+function isSameImage(a: ImageEntry, b: ImageEntry): boolean {
+  return (
+    a.source === b.source &&
+    a.target === b.target &&
+    a.profile === b.profile &&
+    a.enabled === b.enabled &&
+    Boolean(a.pinned) === Boolean(b.pinned) &&
+    (a.notes || '') === (b.notes || '')
+  )
+}
 
 function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
   if (!active) return null
@@ -120,7 +134,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
+export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, loading, lastSavedAt }: Props) {
   const profileNames = useMemo(() => {
     const set = new Set<string>()
     for (const name of Object.keys(config.profiles)) {
@@ -227,8 +241,68 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
     return idx
   }, [config.images])
 
+  const localImageById = useMemo(() => {
+    const map = new Map<number, ImageEntry>()
+    for (const img of config.images) {
+      if (typeof img.id === 'number') map.set(img.id, img)
+    }
+    return map
+  }, [config.images])
+
+  const savedImageById = useMemo(() => {
+    const map = new Map<number, ImageEntry>()
+    for (const img of savedConfig.images) {
+      if (typeof img.id === 'number') map.set(img.id, img)
+    }
+    return map
+  }, [savedConfig.images])
+
+  const deletedSavedImageIds = useMemo(() => {
+    const deleted = new Set<number>()
+    for (const saved of savedConfig.images) {
+      if (typeof saved.id !== 'number') continue
+      if (!localImageById.has(saved.id)) deleted.add(saved.id)
+    }
+    return deleted
+  }, [savedConfig.images, localImageById])
+
+  const draftRows = useMemo(() => {
+    const rows: Array<{ type: DraftChangeType; image: ImageEntry }> = []
+    for (const img of config.images) {
+      if (typeof img.id !== 'number') {
+        rows.push({ type: 'new', image: img })
+        continue
+      }
+      const saved = savedImageById.get(img.id)
+      if (!saved) {
+        rows.push({ type: 'new', image: img })
+        continue
+      }
+      if (!isSameImage(img, saved)) {
+        rows.push({ type: 'updated', image: img })
+      }
+    }
+    for (const saved of savedConfig.images) {
+      if (typeof saved.id !== 'number') continue
+      if (!localImageById.has(saved.id)) {
+        rows.push({ type: 'deleted', image: saved })
+      }
+    }
+    return rows
+  }, [config.images, savedConfig.images, savedImageById, localImageById])
+
+  const savedItemsMerged = useMemo(() => {
+    return searchResult.items
+      .filter((item) => !(typeof item.id === 'number' && deletedSavedImageIds.has(item.id)))
+      .map((item) => {
+        if (typeof item.id !== 'number') return item
+        const local = localImageById.get(item.id)
+        return local ?? item
+      })
+  }, [searchResult.items, deletedSavedImageIds, localImageById])
+
   const visibleRows = useMemo(() => {
-    return searchResult.items.map((entry) => {
+    return savedItemsMerged.map((entry) => {
       const originalIndex = typeof entry.id === 'number'
         ? (imageIndexById.get(entry.id) ?? -1)
         : config.images.findIndex((img) =>
@@ -238,7 +312,7 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
           )
       return { img: entry, i: originalIndex }
     })
-  }, [searchResult.items, imageIndexById, config.images])
+  }, [savedItemsMerged, imageIndexById, config.images])
 
   function toggleSort(field: SortField) {
     setPage(1)
@@ -379,7 +453,10 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
         }
       }
 
-      if (shouldReload) setListNonce((n) => n + 1)
+      if (shouldReload) {
+        setListNonce((n) => n + 1)
+        void reloadFromServer()
+      }
       if (manual) toast('Refreshed')
     } catch (e) {
       if (manual) {
@@ -389,11 +466,11 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
     } finally {
       if (manual) setRefreshingNow(false)
     }
-  }, [])
+  }, [reloadFromServer])
 
   const hasSyncingImages = useMemo(
-    () => searchResult.items.some((img) => getImageSyncStatus(img) === 'syncing'),
-    [searchResult.items]
+    () => savedItemsMerged.some((img) => getImageSyncStatus(img) === 'syncing') || draftRows.some((d) => getImageSyncStatus(d.image) === 'syncing'),
+    [savedItemsMerged, draftRows]
   )
 
   useEffect(() => {
@@ -418,7 +495,7 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
   async function handleTriggerSync() {
     setSyncingNow(true)
     try {
-      const result = await triggerSync()
+      const result = await triggerSync(config)
       if (!result.ok || !result.count) {
         throw new Error(result.message || 'No images to sync')
       }
@@ -435,6 +512,7 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
         }),
       }))
       toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'} — track progress on the Jobs page`)
+      await reloadFromServer()
       void refreshSyncState({ showCompleteToast: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
@@ -546,13 +624,13 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
           </div>
         )}
 
-        {config.images.length === 0 && !formOpen && (
+        {config.images.length === 0 && !formOpen && draftRows.length === 0 && (
           <p className="text-muted-foreground py-8 text-center text-sm">
             No image entries yet. Click "Add Image" to get started.
           </p>
         )}
 
-        {config.images.length > 0 && (
+        {(config.images.length > 0 || searchResult.total > 0 || draftRows.length > 0) && (
           <>
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
@@ -573,6 +651,53 @@ export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
                 {searchResult.total}
               </span>
             </div>
+
+            {draftRows.length > 0 && (
+              <div className="rounded-md border">
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                  <p className="text-sm font-medium">Draft Changes</p>
+                  <Badge variant="pending">{draftRows.length}</Badge>
+                </div>
+                <div className="overflow-x-auto">
+                  <Table className="table-fixed w-full min-w-[640px]">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[96px]">Type</TableHead>
+                        <TableHead className="w-[34%]">Source</TableHead>
+                        <TableHead className="w-[34%]">Target</TableHead>
+                        <TableHead className="w-[96px]">Profile</TableHead>
+                        <TableHead className="w-[96px]">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {draftRows.map((row, idx) => (
+                        <TableRow key={`${row.type}-${row.image.id ?? 'draft'}-${row.image.source}-${idx}`}>
+                          <TableCell className="py-2">
+                            <Badge variant={row.type === 'deleted' ? 'destructive' : (row.type === 'new' ? 'success' : 'outline')}>
+                              {row.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate font-mono text-xs" title={row.image.source}>{row.image.source}</span>
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate font-mono text-xs text-muted-foreground" title={row.image.target}>
+                              {buildFullTarget(config.profiles[row.image.profile]?.registry ?? '', row.image.target)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 overflow-hidden">
+                            <span className="block truncate text-xs text-muted-foreground" title={row.image.profile}>{row.image.profile}</span>
+                          </TableCell>
+                          <TableCell className="py-2">
+                            <SyncStatusBadge entry={row.image} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
 
             {searchResult.loading ? (
               <p className="text-muted-foreground py-8 text-center text-sm">

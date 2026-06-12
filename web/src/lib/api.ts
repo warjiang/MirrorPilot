@@ -1,4 +1,6 @@
 import type { DetectRequest, DetectResponse } from './types'
+import type { MirrorConfig } from './types'
+import { toV2Payload } from './cloudflare'
 
 interface TriggerSyncResponse {
   ok: boolean
@@ -100,9 +102,11 @@ export async function detect(req: DetectRequest): Promise<DetectResponse> {
   return (await res.json()) as DetectResponse
 }
 
-export async function triggerSync(): Promise<TriggerSyncResponse> {
+export async function triggerSync(draft?: MirrorConfig): Promise<TriggerSyncResponse> {
   const res = await fetch('/api/sync/trigger', {
     method: 'POST',
+    headers: draft ? { 'content-type': 'application/json' } : undefined,
+    body: draft ? JSON.stringify({ draft: toV2Payload(draft) }) : undefined,
   })
   const body = await res.json().catch(() => ({})) as TriggerSyncResponse & { error?: string }
   if (!res.ok) {

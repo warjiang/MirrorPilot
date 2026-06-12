@@ -83,7 +83,7 @@ interface ImageRow {
   syncedAt: string | null
 }
 
-interface V2ConfigPayload {
+export interface V2ConfigPayload {
   version?: string
   profiles: Array<{
     id?: number
@@ -293,25 +293,22 @@ export const getConfigHandler = async (c: Context<AppEnv>) => {
   })
 }
 
-export const putConfigHandler = async (c: Context<AppEnv>) => {
-  const db = c.get('db')
-  const userId = c.get('user').id
+export function isV2ConfigPayload(body: unknown): body is V2ConfigPayload {
+  if (!body || typeof body !== 'object') return false
+  const maybe = body as Partial<V2ConfigPayload>
+  return (
+    Array.isArray(maybe.profiles) &&
+    Array.isArray(maybe.images) &&
+    Array.isArray(maybe.user_images) &&
+    Array.isArray(maybe.image_profiles)
+  )
+}
 
-  let body: V2ConfigPayload
-  try {
-    body = await c.req.json()
-  } catch {
-    return c.json({ error: 'invalid JSON body' }, 400)
-  }
-
-  if (!body || typeof body !== 'object') {
-    return c.json({ error: 'config must be a JSON object' }, 400)
-  }
-  if (!Array.isArray(body.profiles) || !Array.isArray(body.images) || !Array.isArray(body.user_images) || !Array.isArray(body.image_profiles)) {
-    return c.json({ error: 'V2 payload requires profiles/images/user_images/image_profiles arrays' }, 400)
-  }
-
+export async function materializeV2Config(db: Db, userId: number, body: V2ConfigPayload) {
   const profileIdsByName = new Map<string, number>()
+  const imageIdByKey = new Map<string, number>()
+  const imageIdByClientId = new Map<number, number>()
+  const profileIdByClientId = new Map<number, number>()
 
   for (const p of body.profiles) {
     const name = String(p.name || '').trim()
@@ -340,16 +337,26 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
       })
   }
 
-  const existingProfiles = await db
-    .select({ id: profiles.id, name: profiles.name })
-    .from(profiles)
-    .where(inArray(profiles.name, body.profiles.map((p) => String(p.name || '').trim()).filter(Boolean)))
+  const profileNames = body.profiles.map((p) => String(p.name || '').trim()).filter(Boolean)
+  if (profileNames.length > 0) {
+    const existingProfiles = await db
+      .select({ id: profiles.id, name: profiles.name })
+      .from(profiles)
+      .where(inArray(profiles.name, profileNames))
 
-  for (const row of existingProfiles) {
-    profileIdsByName.set(row.name, row.id)
+    for (const row of existingProfiles) {
+      profileIdsByName.set(row.name, row.id)
+    }
   }
 
-  const imageIdByKey = new Map<string, number>()
+  for (const p of body.profiles) {
+    const name = String(p.name || '').trim()
+    if (!name) continue
+    if (typeof p.id === 'number' && Number.isFinite(p.id) && p.id > 0) {
+      const resolved = profileIdsByName.get(name)
+      if (resolved) profileIdByClientId.set(Math.trunc(p.id), resolved)
+    }
+  }
 
   for (const img of body.images) {
     const source = String(img.source || '').trim()
@@ -359,14 +366,14 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
     let currentId: number | null = null
 
     if (typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0) {
+      const requestedId = Math.trunc(img.id)
       const byId = await db
         .select({ id: images.id })
         .from(images)
-        .where(eq(images.id, Math.trunc(img.id)))
+        .where(eq(images.id, requestedId))
         .limit(1)
       if (byId[0]) {
-        const matchedId = byId[0].id
-        currentId = matchedId
+        currentId = byId[0].id
         await db
           .update(images)
           .set({
@@ -376,7 +383,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
             notes: String(img.notes || ''),
             updatedAt: sql`datetime('now')`,
           })
-          .where(eq(images.id, matchedId))
+          .where(eq(images.id, currentId))
       }
     }
 
@@ -388,8 +395,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
         .orderBy(desc(images.id))
         .limit(1)
       if (byKey[0]) {
-        const matchedId = byKey[0].id
-        currentId = matchedId
+        currentId = byKey[0].id
         await db
           .update(images)
           .set({
@@ -397,7 +403,7 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
             notes: String(img.notes || ''),
             updatedAt: sql`datetime('now')`,
           })
-          .where(eq(images.id, matchedId))
+          .where(eq(images.id, currentId))
       }
     }
 
@@ -416,29 +422,34 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
 
     if (currentId) {
       imageIdByKey.set(imageKey(source, target), currentId)
+      if (typeof img.id === 'number' && Number.isFinite(img.id) && img.id > 0) {
+        imageIdByClientId.set(Math.trunc(img.id), currentId)
+      }
     }
   }
 
   const resolveImageId = (row: { image_id?: number; source?: string; default_target?: string; target_override?: string | null }): number | null => {
     if (typeof row.image_id === 'number' && Number.isFinite(row.image_id) && row.image_id > 0) {
-      return Math.trunc(row.image_id)
+      const mapped = imageIdByClientId.get(Math.trunc(row.image_id))
+      if (mapped) return mapped
     }
 
     const source = String(row.source || '').trim()
     const defaultTarget = String(row.default_target || row.target_override || '').trim()
     if (!source || !defaultTarget) return null
-
     return imageIdByKey.get(imageKey(source, defaultTarget)) || null
   }
 
   const resolveProfileId = (row: { profile_id?: number; profile_name?: string }): number | null => {
     if (typeof row.profile_id === 'number' && Number.isFinite(row.profile_id) && row.profile_id > 0) {
-      return Math.trunc(row.profile_id)
+      const mapped = profileIdByClientId.get(Math.trunc(row.profile_id))
+      if (mapped) return mapped
+      const byName = [...profileIdsByName.values()].includes(Math.trunc(row.profile_id))
+      if (byName) return Math.trunc(row.profile_id)
     }
 
     const name = String(row.profile_name || '').trim()
     if (!name) return null
-
     return profileIdsByName.get(name) || null
   }
 
@@ -470,12 +481,10 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   }
 
   const touchedImageIds = new Set<number>()
-
   for (const ui of body.user_images) {
     const imageId = resolveImageId(ui)
     if (!imageId) continue
     touchedImageIds.add(imageId)
-
     statements.push(
       db.insert(userImages).values({
         userId,
@@ -501,7 +510,6 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
     const imageId = resolveImageId(ip)
     const profileId = resolveProfileId(ip)
     if (!imageId || !profileId) continue
-
     statements.push(
       db.insert(imageProfiles).values({
         imageId,
@@ -516,12 +524,30 @@ export const putConfigHandler = async (c: Context<AppEnv>) => {
   if (statements.length) {
     await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
   }
+}
+
+export const putConfigHandler = async (c: Context<AppEnv>) => {
+  const db = c.get('db')
+  const userId = c.get('user').id
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'invalid JSON body' }, 400)
+  }
+
+  if (!isV2ConfigPayload(body)) {
+    return c.json({ error: 'V2 payload requires profiles/images/user_images/image_profiles arrays' }, 400)
+  }
+  await materializeV2Config(db, userId, body)
 
   return c.json({ ok: true })
 }
 
 imagesRoutes.get('/', getConfigHandler)
 imagesRoutes.put('/', putConfigHandler)
+imagesRoutes.post('/materialize', putConfigHandler)
 
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
