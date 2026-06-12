@@ -14,13 +14,12 @@ interface Props {
 }
 
 const navItems = [
-  { to: '/mirrors', label: 'Mirrors' },
+  { to: '/images', label: 'Images' },
   { to: '/jobs', label: 'Jobs' },
 ]
 
 const adminNavItems = [
   { to: '/profiles', label: 'Profiles' },
-  { to: '/settings', label: 'Settings' },
   { to: '/admin', label: 'Admin' },
 ]
 

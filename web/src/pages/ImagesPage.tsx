@@ -41,7 +41,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { toast } from '@/components/Toaster'
 import { buildFullTarget, deriveTarget, validateImageReference } from '@/lib/image'
 import type { ImageEntry, MirrorConfig } from '@/lib/types'
-import { searchMirrors } from '@/lib/cloudflare'
+import { searchImages } from '@/lib/cloudflare'
 
 interface Props {
   config: MirrorConfig
@@ -120,7 +120,7 @@ function SyncStatusBadge({ entry }: { entry: ImageEntry }) {
   }
 }
 
-export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) {
+export function ImagesPage({ config, setConfig, loading, lastSavedAt }: Props) {
   const profileNames = useMemo(() => {
     const set = new Set<string>()
     for (const name of Object.keys(config.profiles)) {
@@ -187,7 +187,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
   useEffect(() => {
     if (loading) return
     const controller = new AbortController()
-    searchMirrors({
+    searchImages({
       q: trimmedSearchQuery,
       page,
       pageSize: PAGE_SIZE,
@@ -493,7 +493,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
               Refresh
             </Button>
             <Button size="sm" onClick={startCreate} disabled={formOpen}>
-              <Plus /> Add Mirror
+              <Plus /> Add Image
             </Button>
           </div>
         </div>
@@ -548,7 +548,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
 
         {config.images.length === 0 && !formOpen && (
           <p className="text-muted-foreground py-8 text-center text-sm">
-            No mirror entries yet. Click "Add Mirror" to get started.
+            No image entries yet. Click "Add Image" to get started.
           </p>
         )}
 
@@ -580,7 +580,7 @@ export function MirrorsPage({ config, setConfig, loading, lastSavedAt }: Props) 
               </p>
             ) : searchResult.total === 0 ? (
               <p className="text-muted-foreground py-8 text-center text-sm">
-                {trimmedSearchQuery ? `No entries match "${searchQuery}".` : 'No mirror entries yet.'}
+                {trimmedSearchQuery ? `No entries match "${searchQuery}".` : 'No image entries yet.'}
               </p>
             ) : (
               <>

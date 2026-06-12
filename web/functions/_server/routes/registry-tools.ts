@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { and, eq } from 'drizzle-orm'
 import type { AppEnv } from '../types'
-import { registrySecrets } from '../db/schema'
+import { profiles, userProfiles } from '../db/schema'
 import {
   apiHostFor,
   manifestExists,
@@ -75,9 +75,10 @@ checkRegistryRoutes.post('/', async (c) => {
   // If not provided in request, try to load saved credentials
   if (!username && user) {
     const rows = await db
-      .select({ destUser: registrySecrets.destUser, destPass: registrySecrets.destPass })
-      .from(registrySecrets)
-      .where(and(eq(registrySecrets.userId, user.id), eq(registrySecrets.registry, body.registry)))
+      .select({ destUser: profiles.username, destPass: profiles.passwordSecret })
+      .from(userProfiles)
+      .innerJoin(profiles, eq(profiles.id, userProfiles.profileId))
+      .where(and(eq(userProfiles.userId, user.id), eq(profiles.registry, body.registry), eq(userProfiles.enabled, 1)))
       .limit(1)
     if (rows[0]) {
       username = rows[0].destUser

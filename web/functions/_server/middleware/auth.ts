@@ -1,7 +1,7 @@
 import { createMiddleware } from 'hono/factory'
 import type { AppEnv } from '../types'
 import {
-  getOrCreateUserByEmail,
+  getOrCreateUserByEmailWithAdmin,
   getSessionId,
   getSessionUser,
   renewSession,
@@ -29,14 +29,18 @@ export const authMiddleware = createMiddleware<AppEnv>(async (c, next) => {
 
   const devEmail = c.env.DEV_USER_EMAIL?.toLowerCase().trim()
   if (devEmail) {
-    const user = await getOrCreateUserByEmail(db, devEmail)
+    const user = await getOrCreateUserByEmailWithAdmin(db, devEmail, c.env.ADMIN_EMAIL)
     c.set('user', user)
     return next()
   }
 
   const accessEmail = c.req.header('Cf-Access-Authenticated-User-Email')
   if (accessEmail) {
-    const user = await getOrCreateUserByEmail(db, accessEmail.toLowerCase().trim())
+    const user = await getOrCreateUserByEmailWithAdmin(
+      db,
+      accessEmail.toLowerCase().trim(),
+      c.env.ADMIN_EMAIL
+    )
     c.set('user', user)
     return next()
   }

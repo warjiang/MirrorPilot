@@ -58,7 +58,7 @@ export function LandingPage() {
   }
 
   if (user) {
-    return <Navigate to="/mirrors" replace />
+    return <Navigate to="/images" replace />
   }
 
   return (

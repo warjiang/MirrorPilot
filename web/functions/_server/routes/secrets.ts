@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import type { AppEnv } from '../types'
-import { registrySecrets } from '../db/schema'
+import { profiles, userProfiles } from '../db/schema'
 
 export const secretsRoutes = new Hono<AppEnv>()
 
@@ -11,19 +11,26 @@ secretsRoutes.get('/registry', async (c) => {
 
   const rows = await db
     .select({
-      registry: registrySecrets.registry,
-      destUser: registrySecrets.destUser,
+      profileId: profiles.id,
+      profileName: profiles.name,
+      registry: profiles.registry,
+      destUser: profiles.username,
+      enabled: userProfiles.enabled,
     })
-    .from(registrySecrets)
-    .where(eq(registrySecrets.userId, userId))
-    .orderBy(asc(registrySecrets.registry))
+    .from(userProfiles)
+    .innerJoin(profiles, eq(profiles.id, userProfiles.profileId))
+    .where(eq(userProfiles.userId, userId))
+    .orderBy(asc(profiles.registry), asc(profiles.name))
 
-  const secrets = rows.map((row) => ({
-    registry: row.registry,
-    destUser: row.destUser,
-    // Don't return the password
-    destPass: '***',
-  }))
+  const secrets = rows
+    .filter((row) => row.enabled === 1)
+    .map((row) => ({
+      profileId: row.profileId,
+      profileName: row.profileName,
+      registry: row.registry,
+      destUser: row.destUser,
+      destPass: '***',
+    }))
 
   return c.json({ secrets })
 })
@@ -32,7 +39,7 @@ secretsRoutes.post('/registry', async (c) => {
   const db = c.get('db')
   const userId = c.get('user').id
 
-  let body: { registry?: string; destUser?: string; destPass?: string }
+  let body: { registry?: string; destUser?: string; destPass?: string; profileName?: string }
   try {
     body = await c.req.json()
   } catch {
@@ -43,31 +50,74 @@ secretsRoutes.post('/registry', async (c) => {
     return c.json({ error: 'registry, destUser, and destPass are required' }, 400)
   }
 
-  // Validate registry format (should be a valid registry URL)
   try {
     new URL(`https://${body.registry}`)
   } catch {
     return c.json({ error: 'invalid registry format' }, 400)
   }
 
+  let profileName = (body.profileName || '').trim()
+  if (!profileName) {
+    const existing = await db
+      .select({ name: profiles.name })
+      .from(userProfiles)
+      .innerJoin(profiles, eq(profiles.id, userProfiles.profileId))
+      .where(and(eq(userProfiles.userId, userId), eq(profiles.registry, body.registry)))
+      .orderBy(asc(profiles.id))
+      .limit(1)
+
+    profileName = existing[0]?.name || `profile-${body.registry.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+  }
+
   await db
-    .insert(registrySecrets)
+    .insert(profiles)
     .values({
-      userId,
+      name: profileName,
       registry: body.registry,
-      destUser: body.destUser,
-      destPass: body.destPass,
+      authType: 'basic',
+      username: body.destUser,
+      passwordSecret: body.destPass,
+      isActive: 1,
     })
     .onConflictDoUpdate({
-      target: [registrySecrets.userId, registrySecrets.registry],
+      target: profiles.name,
       set: {
-        destUser: body.destUser,
-        destPass: body.destPass,
+        registry: body.registry,
+        username: body.destUser,
+        passwordSecret: body.destPass,
+        authType: 'basic',
+        isActive: 1,
         updatedAt: sql`datetime('now')`,
       },
     })
 
-  return c.json({ ok: true })
+  const profile = await db
+    .select({ id: profiles.id })
+    .from(profiles)
+    .where(eq(profiles.name, profileName))
+    .limit(1)
+
+  if (!profile[0]) {
+    return c.json({ error: 'failed to create profile' }, 500)
+  }
+
+  await db
+    .insert(userProfiles)
+    .values({
+      userId,
+      profileId: profile[0].id,
+      enabled: 1,
+      grantedBy: userId,
+    })
+    .onConflictDoUpdate({
+      target: [userProfiles.userId, userProfiles.profileId],
+      set: {
+        enabled: 1,
+        updatedAt: sql`datetime('now')`,
+      },
+    })
+
+  return c.json({ ok: true, profileName })
 })
 
 secretsRoutes.delete('/registry', async (c) => {
@@ -79,9 +129,20 @@ secretsRoutes.delete('/registry', async (c) => {
     return c.json({ error: 'registry query parameter is required' }, 400)
   }
 
-  await db
-    .delete(registrySecrets)
-    .where(and(eq(registrySecrets.userId, userId), eq(registrySecrets.registry, registry)))
+  const rows = await db
+    .select({ profileId: profiles.id })
+    .from(userProfiles)
+    .innerJoin(profiles, eq(profiles.id, userProfiles.profileId))
+    .where(and(eq(userProfiles.userId, userId), eq(profiles.registry, registry)))
+
+  if (rows.length) {
+    await db.batch([
+      db
+        .update(profiles)
+        .set({ username: '', passwordSecret: '', updatedAt: sql`datetime('now')` })
+        .where(inArray(profiles.id, rows.map((row) => row.profileId))),
+    ])
+  }
 
   return c.json({ ok: true })
 })

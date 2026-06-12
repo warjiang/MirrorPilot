@@ -15,6 +15,9 @@ export const users = sqliteTable(
     createdAt: text('created_at')
       .notNull()
       .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
     githubId: integer('github_id'),
     name: text('name').notNull().default(''),
     avatarUrl: text('avatar_url').notNull().default(''),
@@ -70,100 +73,12 @@ export const profiles = sqliteTable(
   'profiles',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     registry: text('registry').notNull().default(''),
-    usernameEnv: text('username_env').notNull().default(''),
-    passwordEnv: text('password_env').notNull().default(''),
-    credentialRegistry: text('credential_registry').default(''),
-  },
-  (t) => [
-    uniqueIndex('profiles_user_id_name_unique').on(t.userId, t.name),
-    index('idx_profiles_user').on(t.userId),
-  ]
-)
-
-export const images = sqliteTable(
-  'images',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    source: text('source').notNull(),
-    target: text('target').notNull(),
-    profile: text('profile').notNull().default('default'),
-    enabled: integer('enabled').notNull().default(1),
-    pinned: integer('pinned').notNull().default(0),
-    synced: integer('synced').notNull().default(0),
-    notes: text('notes').notNull().default(''),
-    createdAt: text('created_at')
-      .notNull()
-      .default(sql`(datetime('now'))`),
-    syncedAt: text('synced_at'),
-    status: text('status').notNull().default('pending'),
-    syncError: text('sync_error').notNull().default(''),
-    syncRunId: text('sync_run_id').notNull().default(''),
-    isCacheEntry: integer('is_cache_entry').notNull().default(0),
-  },
-  (t) => [
-    index('idx_images_user').on(t.userId),
-    index('idx_images_cache').on(t.userId, t.profile, t.source, t.isCacheEntry),
-  ]
-)
-
-export const jobs = sqliteTable(
-  'jobs',
-  {
-    id: text('id').primaryKey(),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    status: text('status').notNull().default('pending'),
-    githubRunId: integer('github_run_id'),
-    imageTotal: integer('image_total').notNull().default(0),
-    imageSuccess: integer('image_success').notNull().default(0),
-    imageFailed: integer('image_failed').notNull().default(0),
-    error: text('error').notNull().default(''),
-    createdAt: text('created_at')
-      .notNull()
-      .default(sql`(datetime('now'))`),
-    startedAt: text('started_at'),
-    finishedAt: text('finished_at'),
-  },
-  (t) => [index('idx_jobs_user').on(t.userId, t.createdAt)]
-)
-
-export const jobItems = sqliteTable(
-  'job_items',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    jobId: text('job_id')
-      .notNull()
-      .references(() => jobs.id, { onDelete: 'cascade' }),
-    imageId: integer('image_id').notNull(),
-    source: text('source').notNull(),
-    target: text('target').notNull(),
-    status: text('status').notNull().default('pending'),
-    error: text('error').notNull().default(''),
-    durationMs: integer('duration_ms'),
-    finishedAt: text('finished_at'),
-  },
-  (t) => [index('idx_job_items_job').on(t.jobId)]
-)
-
-export const registrySecrets = sqliteTable(
-  'registry_secrets',
-  {
-    id: integer('id').primaryKey({ autoIncrement: true }),
-    userId: integer('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    registry: text('registry').notNull(),
-    destUser: text('dest_user').notNull(),
-    destPass: text('dest_pass').notNull(),
+    authType: text('auth_type').notNull().default('basic'),
+    username: text('username').notNull().default(''),
+    passwordSecret: text('password_secret').notNull().default(''),
+    isActive: integer('is_active').notNull().default(1),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -172,10 +87,191 @@ export const registrySecrets = sqliteTable(
       .default(sql`(datetime('now'))`),
   },
   (t) => [
-    uniqueIndex('registry_secrets_user_id_registry_unique').on(
-      t.userId,
-      t.registry
-    ),
-    index('idx_registry_secrets_user').on(t.userId),
+    uniqueIndex('profiles_name_unique').on(t.name),
+    index('idx_profiles_active').on(t.isActive),
+  ]
+)
+
+export const images = sqliteTable(
+  'images',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    source: text('source').notNull(),
+    target: text('default_target').notNull(),
+    isActive: integer('is_active').notNull().default(1),
+    notes: text('notes').notNull().default(''),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    index('idx_images_source').on(t.source),
+    index('idx_images_active').on(t.isActive),
+  ]
+)
+
+export const userProfiles = sqliteTable(
+  'user_profiles',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    profileId: integer('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    enabled: integer('enabled').notNull().default(1),
+    grantedBy: integer('granted_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    uniqueIndex('user_profiles_user_id_profile_id_unique').on(t.userId, t.profileId),
+    index('idx_user_profiles_user').on(t.userId, t.enabled),
+    index('idx_user_profiles_profile').on(t.profileId),
+  ]
+)
+
+export const userImages = sqliteTable(
+  'user_images',
+  {
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    imageId: integer('image_id')
+      .notNull()
+      .references(() => images.id, { onDelete: 'cascade' }),
+    enabled: integer('enabled').notNull().default(1),
+    pinned: integer('pinned').notNull().default(0),
+    targetOverride: text('target_override'),
+    notes: text('notes').notNull().default(''),
+    lastSyncStatus: text('last_sync_status').notNull().default('pending'),
+    lastSyncAt: text('last_sync_at'),
+    lastError: text('last_error').notNull().default(''),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    uniqueIndex('user_images_user_id_image_id_unique').on(t.userId, t.imageId),
+    index('idx_user_images_user_enabled_pinned').on(t.userId, t.enabled, t.pinned),
+    index('idx_user_images_last_sync').on(t.userId, t.lastSyncStatus),
+  ]
+)
+
+export const imageProfiles = sqliteTable(
+  'image_profiles',
+  {
+    imageId: integer('image_id')
+      .notNull()
+      .references(() => images.id, { onDelete: 'cascade' }),
+    profileId: integer('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    enabled: integer('enabled').notNull().default(1),
+    priority: integer('priority').notNull().default(100),
+    isDefault: integer('is_default').notNull().default(0),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    uniqueIndex('image_profiles_image_id_profile_id_unique').on(t.imageId, t.profileId),
+    index('idx_image_profiles_image_enabled_priority').on(t.imageId, t.enabled, t.priority),
+    index('idx_image_profiles_profile').on(t.profileId),
+  ]
+)
+
+export const jobs = sqliteTable(
+  'sync_jobs',
+  {
+    id: text('id').primaryKey(),
+    userId: integer('trigger_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'),
+    githubRunId: integer('github_run_id'),
+    requestId: text('request_id').notNull().default(''),
+    imageTotal: integer('image_total').notNull().default(0),
+    imageSuccess: integer('image_success').notNull().default(0),
+    imageFailed: integer('image_failed').notNull().default(0),
+    error: text('error_summary').notNull().default(''),
+    createdAt: text('triggered_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    startedAt: text('started_at'),
+    finishedAt: text('finished_at'),
+  },
+  (t) => [
+    index('idx_sync_jobs_user_triggered').on(t.userId, t.createdAt),
+    index('idx_sync_jobs_status').on(t.status),
+  ]
+)
+
+export const jobItems = sqliteTable(
+  'sync_job_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    imageId: integer('image_id')
+      .notNull()
+      .references(() => images.id, { onDelete: 'cascade' }),
+    profileId: integer('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    target: text('target').notNull(),
+    status: text('status').notNull().default('pending'),
+    error: text('error').notNull().default(''),
+    durationMs: integer('duration_ms'),
+    finishedAt: text('finished_at'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    index('idx_sync_job_items_job_status').on(t.jobId, t.status),
+    index('idx_sync_job_items_user').on(t.userId),
+    index('idx_sync_job_items_image').on(t.imageId),
+  ]
+)
+
+export const syncJobEvents = sqliteTable(
+  'sync_job_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    jobId: text('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    jobItemId: integer('job_item_id').references(() => jobItems.id, { onDelete: 'set null' }),
+    eventType: text('event_type').notNull(),
+    eventSource: text('event_source').notNull().default('manual'),
+    payloadJson: text('payload_json').notNull().default('{}'),
+    httpStatus: integer('http_status'),
+    message: text('message').notNull().default(''),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (t) => [
+    index('idx_sync_job_events_job_created').on(t.jobId, t.createdAt),
+    index('idx_sync_job_events_item_created').on(t.jobItemId, t.createdAt),
   ]
 )

@@ -1,8 +1,17 @@
 import { Hono } from 'hono'
-import { and, eq, inArray, notInArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
-import { images, jobItems, jobs, profiles, registrySecrets } from '../db/schema'
+import {
+  imageProfiles,
+  images,
+  jobItems,
+  jobs,
+  profiles,
+  syncJobEvents,
+  userImages,
+  userProfiles,
+} from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
 import { githubHeaders } from '../lib/github'
 
@@ -10,6 +19,93 @@ export const syncRoutes = new Hono<AppEnv>()
 
 function validSyncSecret(authHeader: string | undefined, secret: string): boolean {
   return authHeader === `Bearer ${secret}`
+}
+
+async function appendJobEvent(
+  c: { get: (key: 'db') => any },
+  opts: {
+    jobId: string
+    jobItemId?: number | null
+    eventType: string
+    eventSource?: string
+    payload?: unknown
+    httpStatus?: number | null
+    message?: string
+  }
+) {
+  const db = c.get('db')
+  await db.insert(syncJobEvents).values({
+    jobId: opts.jobId,
+    jobItemId: opts.jobItemId ?? null,
+    eventType: opts.eventType,
+    eventSource: opts.eventSource || 'manual',
+    payloadJson: JSON.stringify(opts.payload ?? {}),
+    httpStatus: opts.httpStatus ?? null,
+    message: opts.message || '',
+  })
+}
+
+async function loadProfileChoiceForImages(db: any, userId: number, imageIds: number[]) {
+  if (!imageIds.length) return new Map<number, {
+    profileId: number
+    profileName: string
+    registry: string
+    username: string
+    password: string
+  }>()
+
+  const rows = await db
+    .select({
+      imageId: imageProfiles.imageId,
+      profileId: profiles.id,
+      profileName: profiles.name,
+      registry: profiles.registry,
+      username: profiles.username,
+      password: profiles.passwordSecret,
+      isDefault: imageProfiles.isDefault,
+      priority: imageProfiles.priority,
+    })
+    .from(imageProfiles)
+    .innerJoin(profiles, eq(profiles.id, imageProfiles.profileId))
+    .innerJoin(
+      userProfiles,
+      and(eq(userProfiles.profileId, profiles.id), eq(userProfiles.userId, userId), eq(userProfiles.enabled, 1))
+    )
+    .where(
+      and(
+        inArray(imageProfiles.imageId, imageIds),
+        eq(imageProfiles.enabled, 1),
+        eq(profiles.isActive, 1)
+      )
+    )
+    .orderBy(
+      asc(imageProfiles.imageId),
+      desc(imageProfiles.isDefault),
+      asc(imageProfiles.priority),
+      asc(profiles.id)
+    )
+
+  const picked = new Map<number, {
+    profileId: number
+    profileName: string
+    registry: string
+    username: string
+    password: string
+  }>()
+
+  for (const row of rows) {
+    if (!picked.has(row.imageId)) {
+      picked.set(row.imageId, {
+        profileId: row.profileId,
+        profileName: row.profileName,
+        registry: row.registry,
+        username: row.username,
+        password: row.password,
+      })
+    }
+  }
+
+  return picked
 }
 
 // --- CI-facing endpoints (SYNC_SECRET auth, no session) -------------------
@@ -25,19 +121,41 @@ syncRoutes.get('/pending', async (c) => {
   }
 
   const db = c.get('db')
-  const rows = await db
+  const uiRows = await db
     .select({
-      id: images.id,
+      imageId: userImages.imageId,
       source: images.source,
       target: images.target,
-      profile: images.profile,
-      registry: profiles.registry,
-      username_env: profiles.usernameEnv,
-      password_env: profiles.passwordEnv,
+      targetOverride: userImages.targetOverride,
     })
-    .from(images)
-    .leftJoin(profiles, and(eq(profiles.userId, images.userId), eq(profiles.name, images.profile)))
-    .where(and(eq(images.userId, Number(userId)), eq(images.status, 'syncing')))
+    .from(userImages)
+    .innerJoin(images, eq(images.id, userImages.imageId))
+    .where(
+      and(
+        eq(userImages.userId, Number(userId)),
+        eq(userImages.enabled, 1),
+        eq(userImages.lastSyncStatus, 'syncing')
+      )
+    )
+
+  const profileChoices = await loadProfileChoiceForImages(
+    db,
+    Number(userId),
+    uiRows.map((r) => r.imageId)
+  )
+
+  const rows = uiRows.map((row) => {
+    const profile = profileChoices.get(row.imageId)
+    return {
+      id: row.imageId,
+      source: row.source,
+      target: row.targetOverride || row.target,
+      profile: profile?.profileName || 'default',
+      registry: profile?.registry || '',
+      username_env: profile?.username || '',
+      password_env: profile?.password || '',
+    }
+  })
 
   return c.json({ images: rows })
 })
@@ -56,57 +174,23 @@ syncRoutes.post('/complete', async (c) => {
   const statements: BatchItem<'sqlite'>[] = body.results.map((result) =>
     result.success
       ? db
-          .update(images)
+          .update(userImages)
           .set({
-            status: 'synced',
-            synced: 1,
-            syncedAt: sql`datetime('now')`,
-            syncError: '',
+            lastSyncStatus: 'synced',
+            lastSyncAt: sql`datetime('now')`,
+            lastError: '',
+            updatedAt: sql`datetime('now')`,
           })
-          .where(eq(images.id, result.image_id))
+          .where(eq(userImages.imageId, result.image_id))
       : db
-          .update(images)
-          .set({ status: 'failed', syncError: result.error || 'unknown error' })
-          .where(eq(images.id, result.image_id))
-  )
-
-  // Create/update cache entries for successfully synced images
-  const successIds = body.results.filter((r) => r.success).map((r) => r.image_id)
-  if (successIds.length) {
-    const syncedRows = await db
-      .select({ id: images.id, userId: images.userId, source: images.source, target: images.target, profile: images.profile })
-      .from(images)
-      .where(inArray(images.id, successIds))
-
-    for (const row of syncedRows) {
-      // Upsert: check if cache entry exists, if not insert one
-      const existing = await db
-        .select({ id: images.id })
-        .from(images)
-        .where(and(eq(images.userId, row.userId), eq(images.profile, row.profile), eq(images.source, row.source), eq(images.isCacheEntry, 1)))
-        .limit(1)
-
-      if (existing.length) {
-        statements.push(
-          db.update(images).set({ syncedAt: sql`datetime('now')`, target: row.target }).where(eq(images.id, existing[0].id))
-        )
-      } else {
-        statements.push(
-          db.insert(images).values({
-            userId: row.userId,
-            source: row.source,
-            target: row.target,
-            profile: row.profile,
-            enabled: 0,
-            synced: 1,
-            status: 'synced',
-            syncedAt: sql`datetime('now')`,
-            isCacheEntry: 1,
+          .update(userImages)
+          .set({
+            lastSyncStatus: 'failed',
+            lastError: result.error || 'unknown error',
+            updatedAt: sql`datetime('now')`,
           })
-        )
-      }
-    }
-  }
+          .where(eq(userImages.imageId, result.image_id))
+  )
 
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
   return c.json({ ok: true, processed: body.results.length })
@@ -134,6 +218,15 @@ syncRoutes.post('/jobs/:id/start', async (c) => {
   if (!result.meta.changes) {
     return c.json({ error: 'Job not found or not startable' }, 404)
   }
+
+  await appendJobEvent(c, {
+    jobId,
+    eventType: 'job_started',
+    eventSource: 'webhook',
+    payload: body,
+    message: `workflow run ${body.run_id} started`,
+  })
+
   return c.json({ ok: true })
 })
 
@@ -161,23 +254,41 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
     return c.json({ error: 'Job not found' }, 404)
   }
 
+  const itemRows = await db
+    .select({
+      id: jobItems.id,
+      imageId: jobItems.imageId,
+      userId: jobItems.userId,
+    })
+    .from(jobItems)
+    .where(eq(jobItems.jobId, jobId))
+
+  const itemByImageId = new Map(itemRows.map((r) => [r.imageId, r]))
+
   const statements: BatchItem<'sqlite'>[] = []
   let success = 0
   let failed = 0
-  const successImageIds: number[] = []
+
   for (const ev of body.events) {
+    const item = itemByImageId.get(ev.image_id)
+    if (!item) continue
+
     if (ev.success) {
       success++
-      successImageIds.push(ev.image_id)
       statements.push(
         db
           .update(jobItems)
           .set({ status: 'succeeded', error: '', durationMs: ev.duration_ms ?? null, finishedAt: sql`datetime('now')` })
-          .where(and(eq(jobItems.jobId, jobId), eq(jobItems.imageId, ev.image_id))),
+          .where(eq(jobItems.id, item.id)),
         db
-          .update(images)
-          .set({ status: 'synced', synced: 1, syncedAt: sql`datetime('now')`, syncError: '' })
-          .where(eq(images.id, ev.image_id))
+          .update(userImages)
+          .set({
+            lastSyncStatus: 'synced',
+            lastSyncAt: sql`datetime('now')`,
+            lastError: '',
+            updatedAt: sql`datetime('now')`,
+          })
+          .where(and(eq(userImages.userId, item.userId), eq(userImages.imageId, ev.image_id)))
       )
     } else {
       failed++
@@ -190,49 +301,28 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
             durationMs: ev.duration_ms ?? null,
             finishedAt: sql`datetime('now')`,
           })
-          .where(and(eq(jobItems.jobId, jobId), eq(jobItems.imageId, ev.image_id))),
+          .where(eq(jobItems.id, item.id)),
         db
-          .update(images)
-          .set({ status: 'failed', syncError: ev.error || 'unknown error' })
-          .where(eq(images.id, ev.image_id))
+          .update(userImages)
+          .set({
+            lastSyncStatus: 'failed',
+            lastError: ev.error || 'unknown error',
+            updatedAt: sql`datetime('now')`,
+          })
+          .where(and(eq(userImages.userId, item.userId), eq(userImages.imageId, ev.image_id)))
       )
     }
-  }
 
-  // Create/update cache entries for successfully synced images
-  if (successImageIds.length) {
-    const syncedRows = await db
-      .select({ id: images.id, userId: images.userId, source: images.source, target: images.target, profile: images.profile })
-      .from(images)
-      .where(inArray(images.id, successImageIds))
-
-    for (const row of syncedRows) {
-      const existing = await db
-        .select({ id: images.id })
-        .from(images)
-        .where(and(eq(images.userId, row.userId), eq(images.profile, row.profile), eq(images.source, row.source), eq(images.isCacheEntry, 1)))
-        .limit(1)
-
-      if (existing.length) {
-        statements.push(
-          db.update(images).set({ syncedAt: sql`datetime('now')`, target: row.target }).where(eq(images.id, existing[0].id))
-        )
-      } else {
-        statements.push(
-          db.insert(images).values({
-            userId: row.userId,
-            source: row.source,
-            target: row.target,
-            profile: row.profile,
-            enabled: 0,
-            synced: 1,
-            status: 'synced',
-            syncedAt: sql`datetime('now')`,
-            isCacheEntry: 1,
-          })
-        )
-      }
-    }
+    statements.push(
+      db.insert(syncJobEvents).values({
+        jobId,
+        jobItemId: item.id,
+        eventType: ev.success ? 'item_succeeded' : 'item_failed',
+        eventSource: 'webhook',
+        payloadJson: JSON.stringify(ev),
+        message: ev.success ? 'item sync succeeded' : (ev.error || 'item sync failed'),
+      })
+    )
   }
 
   statements.push(
@@ -267,7 +357,6 @@ syncRoutes.post('/jobs/:id/complete', async (c) => {
     return c.json({ ok: true, status: 'cancelled' })
   }
 
-  // Items never reported back are marked failed
   await db
     .update(jobItems)
     .set({ status: 'failed', error: 'no result reported', finishedAt: sql`datetime('now')` })
@@ -297,22 +386,32 @@ syncRoutes.post('/jobs/:id/complete', async (c) => {
         finishedAt: sql`datetime('now')`,
       })
       .where(eq(jobs.id, jobId)),
-    // Images stuck in syncing whose items failed are marked failed too
     db
-      .update(images)
-      .set({ status: 'failed', syncError: 'no result reported' })
+      .update(userImages)
+      .set({
+        lastSyncStatus: 'failed',
+        lastError: 'no result reported',
+        updatedAt: sql`datetime('now')`,
+      })
       .where(
         and(
-          eq(images.status, 'syncing'),
           inArray(
-            images.id,
+            userImages.imageId,
             db
-              .select({ id: jobItems.imageId })
+              .select({ imageId: jobItems.imageId })
               .from(jobItems)
               .where(and(eq(jobItems.jobId, jobId), eq(jobItems.status, 'failed')))
-          )
+          ),
+          eq(userImages.lastSyncStatus, 'syncing')
         )
       ),
+    db.insert(syncJobEvents).values({
+      jobId,
+      eventType: 'job_completed',
+      eventSource: 'webhook',
+      payloadJson: JSON.stringify({ status, success, failed, error: body?.error || '' }),
+      message: `job completed with status=${status}`,
+    }),
   ])
 
   return c.json({ ok: true, status, success, failed })
@@ -333,12 +432,19 @@ ciSecretsRoutes.get('/', async (c) => {
 
   const db = c.get('db')
   const rows = await db
-    .select({ destUser: registrySecrets.destUser, destPass: registrySecrets.destPass })
-    .from(registrySecrets)
-    .where(eq(registrySecrets.registry, registry))
+    .select({ destUser: profiles.username, destPass: profiles.passwordSecret })
+    .from(profiles)
+    .where(
+      and(
+        eq(profiles.registry, registry),
+        eq(profiles.isActive, 1),
+        isNotNull(profiles.passwordSecret)
+      )
+    )
+    .orderBy(asc(profiles.id))
     .limit(1)
 
-  if (!rows[0]) {
+  if (!rows[0] || !rows[0].destUser || !rows[0].destPass) {
     return c.json({ error: 'registry secret not found' }, 404)
   }
 
@@ -351,77 +457,91 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
   const db = c.get('db')
   const userId = c.get('user').id
 
-  // Fetch images with their profile credentials in one query
-  const rows = await db
+  const uiRows = await db
     .select({
-      id: images.id,
+      imageId: userImages.imageId,
       source: images.source,
-      target: images.target,
-      profile: images.profile,
-      registry: profiles.registry,
-      username_env: profiles.usernameEnv,
-      password_env: profiles.passwordEnv,
+      defaultTarget: images.target,
+      targetOverride: userImages.targetOverride,
+      enabled: userImages.enabled,
     })
-    .from(images)
-    .leftJoin(profiles, and(eq(profiles.userId, images.userId), eq(profiles.name, images.profile)))
-    .where(
-      and(
-        eq(images.userId, userId),
-        eq(images.enabled, 1),
-        eq(images.isCacheEntry, 0),
-        notInArray(images.status, ['synced', 'syncing'])
-      )
-    )
+    .from(userImages)
+    .innerJoin(images, eq(images.id, userImages.imageId))
+    .where(and(eq(userImages.userId, userId), eq(userImages.enabled, 1), eq(images.isActive, 1)))
+
+  const profileChoices = await loadProfileChoiceForImages(
+    db,
+    userId,
+    uiRows.map((r) => r.imageId)
+  )
+
+  const rows = uiRows
+    .map((row) => {
+      const profile = profileChoices.get(row.imageId)
+      if (!profile) return null
+
+      return {
+        id: row.imageId,
+        source: row.source,
+        target: row.targetOverride || row.defaultTarget,
+        profileId: profile.profileId,
+        profile: profile.profileName,
+        registry: profile.registry,
+        username_env: profile.username,
+        password_env: profile.password,
+      }
+    })
+    .filter((row): row is NonNullable<typeof row> => !!row)
 
   if (!rows.length) {
     return c.json({ ok: false, message: 'No images to sync' })
   }
 
-  // Resolve credentials: profile credentials take priority, fallback to registrySecrets
-  const uniqueRegistries = [...new Set(rows.map((r) => r.registry).filter((r): r is string => !!r))]
-  const secretsMap = new Map<string, { destUser: string; destPass: string }>()
-  if (uniqueRegistries.length) {
-    const secretRows = await db
-      .select({ registry: registrySecrets.registry, destUser: registrySecrets.destUser, destPass: registrySecrets.destPass })
-      .from(registrySecrets)
-      .where(and(eq(registrySecrets.userId, userId), inArray(registrySecrets.registry, uniqueRegistries)))
-    for (const s of secretRows) {
-      secretsMap.set(s.registry, { destUser: s.destUser, destPass: s.destPass })
-    }
-  }
+  const payload = rows.map((row) => ({
+    id: row.id,
+    source: row.source,
+    target: row.target,
+    registry: row.registry || '',
+    username: row.username_env || '',
+    password: row.password_env || '',
+  }))
 
-  const payload = rows.map((row) => {
-    let username = row.username_env || ''
-    let password = row.password_env || ''
-    // Fallback to registrySecrets if profile has no credentials
-    if ((!username || !password) && row.registry) {
-      const secret = secretsMap.get(row.registry)
-      if (secret) {
-        username = username || secret.destUser
-        password = password || secret.destPass
-      }
-    }
-    return {
-      id: row.id,
-      source: row.source,
-      target: row.target,
-      registry: row.registry || '',
-      username,
-      password,
-    }
-  })
-
-  // Create job + items before dispatching so the workflow can report back
   const jobId = crypto.randomUUID()
+  const requestId = c.req.header('X-Request-Id') || crypto.randomUUID()
   const jobStatements: BatchItem<'sqlite'>[] = [
-    db.insert(jobs).values({ id: jobId, userId, status: 'pending', imageTotal: payload.length }),
+    db.insert(jobs).values({
+      id: jobId,
+      userId,
+      requestId,
+      status: 'pending',
+      imageTotal: payload.length,
+    }),
   ]
+
   for (const row of rows) {
     const fullTarget = row.registry ? `${row.registry}/${row.target}` : row.target
     jobStatements.push(
-      db.insert(jobItems).values({ jobId, imageId: row.id, source: row.source, target: fullTarget })
+      db.insert(jobItems).values({
+        jobId,
+        userId,
+        imageId: row.id,
+        profileId: row.profileId,
+        source: row.source,
+        target: fullTarget,
+      })
     )
   }
+
+  jobStatements.push(
+    db.insert(syncJobEvents).values({
+      jobId,
+      eventType: 'job_triggered',
+      eventSource: 'manual',
+      payloadJson: JSON.stringify({ payloadCount: payload.length }),
+      message: 'sync trigger accepted',
+    })
+  )
+
   await db.batch(jobStatements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
 
   const dispatchRes = await fetch(`https://api.github.com/repos/${c.env.GITHUB_REPO}/dispatches`, {
@@ -442,27 +562,47 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
 
   if (!dispatchRes.ok) {
     const text = await dispatchRes.text()
-    await db
-      .update(jobs)
-      .set({ status: 'failed', error: `GitHub dispatch failed: ${text}`, finishedAt: sql`datetime('now')` })
-      .where(eq(jobs.id, jobId))
+    await db.batch([
+      db
+        .update(jobs)
+        .set({ status: 'failed', error: `GitHub dispatch failed: ${text}`, finishedAt: sql`datetime('now')` })
+        .where(eq(jobs.id, jobId)),
+      db.insert(syncJobEvents).values({
+        jobId,
+        eventType: 'dispatch_failed',
+        eventSource: 'manual',
+        payloadJson: JSON.stringify({ error: text }),
+        httpStatus: dispatchRes.status,
+        message: 'GitHub dispatch failed',
+      }),
+    ])
+
     return c.json({ ok: false, message: `GitHub dispatch failed: ${text}` }, 502)
   }
 
-  // Mark images as syncing and job as dispatched
   await db.batch([
     db
-      .update(images)
+      .update(userImages)
+      .set({ lastSyncStatus: 'syncing', lastError: '', updatedAt: sql`datetime('now')` })
+      .where(and(eq(userImages.userId, userId), inArray(userImages.imageId, payload.map((img) => img.id)))),
+    db
+      .update(jobItems)
       .set({ status: 'syncing' })
-      .where(inArray(images.id, payload.map((img) => img.id))),
+      .where(eq(jobItems.jobId, jobId)),
     db.update(jobs).set({ status: 'dispatched' }).where(eq(jobs.id, jobId)),
+    db.insert(syncJobEvents).values({
+      jobId,
+      eventType: 'job_dispatched',
+      eventSource: 'manual',
+      payloadJson: JSON.stringify({ payloadCount: payload.length }),
+      message: 'dispatched to GitHub Actions',
+    }),
   ])
 
   return c.json({ ok: true, count: payload.length, jobId })
 })
 
 syncRoutes.get('/status', authMiddleware, async (c) => {
-  // Get the latest web-sync workflow runs
   const res = await fetch(
     `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/runs?event=repository_dispatch&per_page=5`,
     {

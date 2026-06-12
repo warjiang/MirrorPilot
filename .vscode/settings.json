@@ -3,6 +3,7 @@
   "tailwindCSS.lint.suggestCanonicalClasses": "ignore",
   "cSpell.words": [
     "AUTOINCREMENT",
-    "cmdk"
+    "cmdk",
+    "fflate"
   ]
 }

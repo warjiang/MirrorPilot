@@ -216,7 +216,7 @@ authRoutes.get('/callback', async (c) => {
   return new Response(null, {
     status: 302,
     headers: {
-      Location: '/mirrors',
+      Location: '/images',
       'Set-Cookie': sessionCookie(sessionId),
     },
   })
@@ -444,11 +444,19 @@ authRoutes.get('/me', async (c) => {
 
   // Dev bypass: return dev user when DEV_USER_EMAIL is configured
   if (c.env.DEV_USER_EMAIL) {
+    const isAdmin = isAdminEmail(c.env.DEV_USER_EMAIL, c.env.ADMIN_EMAIL)
     const user = await getUserByEmail(db, c.env.DEV_USER_EMAIL.toLowerCase().trim())
     return c.json({
       user: user
         ? toApiUser(user)
-        : { id: 0, email: c.env.DEV_USER_EMAIL, name: 'Dev User', avatar_url: defaultAvatarUrl(c.env.DEV_USER_EMAIL), is_admin: 0, status: 'active' },
+        : {
+            id: 0,
+            email: c.env.DEV_USER_EMAIL,
+            name: 'Dev User',
+            avatar_url: defaultAvatarUrl(c.env.DEV_USER_EMAIL),
+            is_admin: isAdmin ? 1 : 0,
+            status: 'active',
+          },
     })
   }
 

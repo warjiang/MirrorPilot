@@ -4,7 +4,7 @@ import { emptyConfig } from '@/lib/types'
 import type { MirrorConfig } from '@/lib/types'
 import { toast } from '@/components/Toaster'
 
-const CONFIG_KEY = 'mirrorpilot.config.v1'
+const CONFIG_KEY = 'mirrorpilot.config.v2'
 
 export function useCloudflareStorage() {
   const [config, setConfigState] = useState<MirrorConfig>(() => {

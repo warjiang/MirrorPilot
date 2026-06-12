@@ -40,7 +40,7 @@ export function useAuth() {
     if (!res.ok) {
       throw new Error(data.error || 'Login failed')
     }
-    window.location.href = '/mirrors'
+    window.location.href = '/images'
   }
 
   const register = async (email: string, password: string) => {
@@ -67,7 +67,7 @@ export function useAuth() {
       throw new Error(data.error || 'Verification failed')
     }
     if (data.status === 'active') {
-      window.location.href = '/mirrors'
+      window.location.href = '/images'
     }
     return data.status || 'pending'
   }
