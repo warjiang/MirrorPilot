@@ -1,7 +1,9 @@
 import { Hono } from 'hono'
-import { and, asc, desc, eq, inArray, isNotNull, notInArray, sql } from 'drizzle-orm'
+import type { Context } from 'hono'
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
+import type { Db } from '../db'
 import {
   imageProfiles,
   images,
@@ -22,7 +24,7 @@ function validSyncSecret(authHeader: string | undefined, secret: string): boolea
 }
 
 async function appendJobEvent(
-  c: { get: (key: 'db') => any },
+  c: Context<AppEnv>,
   opts: {
     jobId: string
     jobItemId?: number | null
@@ -45,7 +47,7 @@ async function appendJobEvent(
   })
 }
 
-async function loadProfileChoiceForImages(db: any, userId: number, imageIds: number[]) {
+async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: number[]) {
   if (!imageIds.length) return new Map<number, {
     profileId: number
     profileName: string
