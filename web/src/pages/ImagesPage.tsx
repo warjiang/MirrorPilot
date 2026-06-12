@@ -519,6 +519,10 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
 
       // Remove synced drafts from local config and update status
       const syncedDraftKeys = new Set(selectedDrafts.map((d) => `${d.source}\0${d.target}`))
+      // Preserve remaining (unsynced) draft images before reload overwrites local state
+      const remainingDrafts = config.images.filter(
+        (img) => typeof img.id !== 'number' && !syncedDraftKeys.has(`${img.source}\0${img.target}`)
+      )
       setConfig((c) => ({
         ...c,
         images: c.images
@@ -534,6 +538,15 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
       setSelectedDraftKeys(new Set())
       toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'} — track progress on the Jobs page`)
       await reloadFromServer()
+      // Merge back remaining draft images that only exist locally
+      if (remainingDrafts.length > 0) {
+        setConfig((c) => {
+          const serverKeys = new Set(c.images.map((img) => `${img.source}\0${img.target}`))
+          const toRestore = remainingDrafts.filter((d) => !serverKeys.has(`${d.source}\0${d.target}`))
+          if (!toRestore.length) return c
+          return { ...c, images: [...c.images, ...toRestore] }
+        })
+      }
       void refreshSyncState({ showCompleteToast: false })
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to trigger sync'
