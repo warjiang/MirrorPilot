@@ -1,6 +1,7 @@
 PRAGMA foreign_keys = OFF;
 
-ALTER TABLE `users` ADD COLUMN `updated_at` text NOT NULL DEFAULT (datetime('now'));
+ALTER TABLE `users` ADD COLUMN `updated_at` text NOT NULL DEFAULT '';
+UPDATE `users` SET `updated_at` = datetime('now') WHERE `updated_at` = '';
 
 DROP TABLE IF EXISTS `sync_job_events`;
 DROP TABLE IF EXISTS `sync_job_items`;
