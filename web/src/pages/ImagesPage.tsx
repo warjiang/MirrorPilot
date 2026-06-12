@@ -181,6 +181,8 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
   const [refreshingNow, setRefreshingNow] = useState(false)
   const [latestRun, setLatestRun] = useState<{ id: number; status: string; conclusion: string | null; url: string } | null>(null)
   const handledCompletedRunIdRef = useRef<number | null>(null)
+  const configRef = useRef(config)
+  useEffect(() => { configRef.current = config }, [config])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -454,7 +456,17 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
 
       if (shouldReload) {
         setListNonce((n) => n + 1)
-        void reloadFromServer()
+        const localDrafts = configRef.current.images.filter((img) => typeof img.id !== 'number')
+        void reloadFromServer().then(() => {
+          if (localDrafts.length > 0) {
+            setConfig((c) => {
+              const serverKeys = new Set(c.images.map((img) => `${img.source}\0${img.target}`))
+              const toRestore = localDrafts.filter((d) => !serverKeys.has(`${d.source}\0${d.target}`))
+              if (!toRestore.length) return c
+              return { ...c, images: [...c.images, ...toRestore] }
+            })
+          }
+        })
       }
       if (manual) toast('Refreshed')
     } catch (e) {
@@ -465,7 +477,7 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
     } finally {
       if (manual) setRefreshingNow(false)
     }
-  }, [reloadFromServer])
+  }, [reloadFromServer, setConfig])
 
   const hasSyncingImages = useMemo(
     () => savedItemsMerged.some((img) => getImageSyncStatus(img) === 'syncing') || draftRows.some((d) => getImageSyncStatus(d.image) === 'syncing'),
@@ -484,10 +496,16 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
       await refreshSyncState({ showCompleteToast: true })
     }
     void tick()
-    const timer = window.setInterval(() => { void tick() }, 5000)
+    const scheduleNext = () => {
+      const delay = 3000 + Math.random() * 2000
+      return window.setTimeout(() => {
+        void tick().then(() => { if (!stopped) timerId = scheduleNext() })
+      }, delay)
+    }
+    let timerId = scheduleNext()
     return () => {
       stopped = true
-      window.clearInterval(timer)
+      window.clearTimeout(timerId)
     }
   }, [hasSyncingImages, syncingNow, latestRun, refreshSyncState])
 
