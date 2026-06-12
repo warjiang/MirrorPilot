@@ -160,7 +160,8 @@ jobsRoutes.get('/', async (c) => {
 
 jobsRoutes.get('/:id', async (c) => {
   const db = c.get('db')
-  const userId = c.get('user').id
+  const user = c.get('user')
+  const userId = user.id
   const jobId = c.req.param('id')
 
   const rows = await db
@@ -190,7 +191,7 @@ jobsRoutes.get('/:id', async (c) => {
     .where(eq(jobItems.jobId, jobId))
     .orderBy(sql`id`)
 
-  const runUrl = job.github_run_id
+  const runUrl = user.isAdmin === 1 && job.github_run_id
     ? `https://github.com/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`
     : null
 
@@ -331,7 +332,8 @@ interface RunJob {
 
 jobsRoutes.get('/:id/logs', async (c) => {
   const db = c.get('db')
-  const userId = c.get('user').id
+  const user = c.get('user')
+  const userId = user.id
   const jobId = c.req.param('id')
 
   const rows = await db
@@ -347,7 +349,9 @@ jobsRoutes.get('/:id/logs', async (c) => {
     return c.json({ available: false, reason: 'Workflow has not started yet' })
   }
 
-  const runUrl = `https://github.com/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`
+  const runUrl = user.isAdmin === 1
+    ? `https://github.com/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`
+    : null
 
   const runRes = await fetch(
     `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`,

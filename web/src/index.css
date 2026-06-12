@@ -90,3 +90,143 @@
     color: var(--color-foreground);
   }
 }
+
+.ansi-log .ansi-bold {
+  font-weight: 700;
+}
+
+.ansi-log .ansi-italic {
+  font-style: italic;
+}
+
+.ansi-log .ansi-underline {
+  text-decoration: underline;
+}
+
+.ansi-log .ansi-fg-black {
+  color: oklch(0.22 0 0);
+}
+
+.ansi-log .ansi-fg-red {
+  color: oklch(0.58 0.21 25);
+}
+
+.ansi-log .ansi-fg-green {
+  color: oklch(0.63 0.18 145);
+}
+
+.ansi-log .ansi-fg-yellow {
+  color: oklch(0.76 0.16 85);
+}
+
+.ansi-log .ansi-fg-blue {
+  color: oklch(0.56 0.16 255);
+}
+
+.ansi-log .ansi-fg-magenta {
+  color: oklch(0.61 0.2 325);
+}
+
+.ansi-log .ansi-fg-cyan {
+  color: oklch(0.66 0.15 220);
+}
+
+.ansi-log .ansi-fg-white {
+  color: oklch(0.95 0.01 250);
+}
+
+.ansi-log .ansi-fg-bright-black {
+  color: var(--color-muted-foreground);
+}
+
+.ansi-log .ansi-fg-bright-red {
+  color: oklch(0.66 0.2 25);
+}
+
+.ansi-log .ansi-fg-bright-green {
+  color: oklch(0.74 0.2 145);
+}
+
+.ansi-log .ansi-fg-bright-yellow {
+  color: oklch(0.84 0.17 85);
+}
+
+.ansi-log .ansi-fg-bright-blue {
+  color: oklch(0.7 0.16 255);
+}
+
+.ansi-log .ansi-fg-bright-magenta {
+  color: oklch(0.75 0.2 325);
+}
+
+.ansi-log .ansi-fg-bright-cyan {
+  color: oklch(0.79 0.14 220);
+}
+
+.ansi-log .ansi-fg-bright-white {
+  color: var(--color-foreground);
+}
+
+.ansi-log .ansi-bg-black {
+  background-color: oklch(0.18 0 0 / 35%);
+}
+
+.ansi-log .ansi-bg-red {
+  background-color: oklch(0.58 0.21 25 / 25%);
+}
+
+.ansi-log .ansi-bg-green {
+  background-color: oklch(0.63 0.18 145 / 25%);
+}
+
+.ansi-log .ansi-bg-yellow {
+  background-color: oklch(0.76 0.16 85 / 25%);
+}
+
+.ansi-log .ansi-bg-blue {
+  background-color: oklch(0.56 0.16 255 / 25%);
+}
+
+.ansi-log .ansi-bg-magenta {
+  background-color: oklch(0.61 0.2 325 / 25%);
+}
+
+.ansi-log .ansi-bg-cyan {
+  background-color: oklch(0.66 0.15 220 / 25%);
+}
+
+.ansi-log .ansi-bg-white {
+  background-color: oklch(0.95 0.01 250 / 35%);
+}
+
+.ansi-log .ansi-bg-bright-black {
+  background-color: oklch(0.35 0 0 / 25%);
+}
+
+.ansi-log .ansi-bg-bright-red {
+  background-color: oklch(0.66 0.2 25 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-green {
+  background-color: oklch(0.74 0.2 145 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-yellow {
+  background-color: oklch(0.84 0.17 85 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-blue {
+  background-color: oklch(0.7 0.16 255 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-magenta {
+  background-color: oklch(0.75 0.2 325 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-cyan {
+  background-color: oklch(0.79 0.14 220 / 28%);
+}
+
+.ansi-log .ansi-bg-bright-white {
+  background-color: oklch(0.98 0.01 250 / 38%);
+}

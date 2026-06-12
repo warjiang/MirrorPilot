@@ -38,7 +38,7 @@ export interface JobLogsResponse {
   available: boolean
   running?: boolean
   reason?: string
-  run_url?: string
+  run_url?: string | null
   steps?: Array<{
     job: string
     name: string
