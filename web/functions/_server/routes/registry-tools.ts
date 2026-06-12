@@ -112,16 +112,19 @@ interface DetectRequest {
   source: string
   targetRegistry: string
   target: string
+  namespace?: string
   username?: string
   password?: string
 }
 
-function buildFullTarget(registry: string, target: string): string {
+function buildFullTarget(registry: string, target: string, namespace?: string): string {
   const reg = registry.replace(/\/+$/, '').trim()
+  const ns = (namespace || '').replace(/^\/+|\/+$/g, '').trim()
   const t = target.replace(/^\/+/, '').trim()
-  if (reg === '') return t
-  if (t === '') return reg
-  return `${reg}/${t}`
+  const path = ns ? `${ns}/${t}` : t
+  if (reg === '') return path
+  if (path === '') return reg
+  return `${reg}/${path}`
 }
 
 async function checkSource(source: string): Promise<CheckResult> {
@@ -172,9 +175,10 @@ async function checkTargetExists(
   targetRegistry: string,
   target: string,
   username?: string,
-  password?: string
+  password?: string,
+  namespace?: string
 ): Promise<CheckResult> {
-  const full = buildFullTarget(targetRegistry, target)
+  const full = buildFullTarget(targetRegistry, target, namespace)
   if (!targetRegistry.trim() || !target.trim())
     return { state: 'skipped', message: 'target not fully configured' }
   const res = await manifestExists(full, username, password)
@@ -205,14 +209,15 @@ async function checkAuth(
   targetRegistry: string,
   target: string,
   username?: string,
-  password?: string
+  password?: string,
+  namespace?: string
 ): Promise<CheckResult> {
   if (!username && !password)
     return { state: 'skipped', message: 'no credentials provided' }
   if (!targetRegistry.trim())
     return { state: 'skipped', message: 'no target registry configured' }
 
-  const full = buildFullTarget(targetRegistry, target || 'probe')
+  const full = buildFullTarget(targetRegistry, target || 'probe', namespace)
   const ref = parseRef(full)
   const ping = await pingRegistry(ref.apiHost)
   if (!ping.reachable) {
@@ -264,6 +269,7 @@ detectRoutes.post('/', async (c) => {
   const source = (body.source ?? '').trim()
   const targetRegistry = (body.targetRegistry ?? '').trim()
   const target = (body.target ?? '').trim()
+  const namespace = body.namespace?.trim() || undefined
   const username = body.username?.trim() || undefined
   const password = body.password || undefined
 
@@ -274,8 +280,8 @@ detectRoutes.post('/', async (c) => {
   const [src, reachable, targetExists, auth] = await Promise.all([
     checkSource(source),
     checkTargetReachable(targetRegistry),
-    checkTargetExists(targetRegistry, target, username, password),
-    checkAuth(targetRegistry, target, username, password),
+    checkTargetExists(targetRegistry, target, username, password, namespace),
+    checkAuth(targetRegistry, target, username, password, namespace),
   ])
 
   return c.json({ source: src, targetReachable: reachable, targetExists, auth })

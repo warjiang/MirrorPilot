@@ -6,6 +6,7 @@ interface ConfigV2Profile {
   id: number
   name: string
   registry: string
+  namespace: string
   auth_type: string
   username: string
   password_secret: string
@@ -83,6 +84,7 @@ function fromV2(payload: ConfigV2Response): MirrorConfig {
     if (!profile?.name) continue
     profileMap[profile.name] = {
       registry: String(profile.registry || ''),
+      namespace: profile.namespace || undefined,
       username: profile.username || undefined,
       password: profile.password_secret || undefined,
     }
@@ -142,6 +144,7 @@ export function toV2Payload(config: MirrorConfig): ConfigV2Response {
       id: i + 1,
       name,
       registry: p.registry || '',
+      namespace: p.namespace || '',
       auth_type: 'basic',
       username: p.username || '',
       password_secret: p.password || '',

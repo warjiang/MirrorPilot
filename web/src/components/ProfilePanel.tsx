@@ -19,19 +19,32 @@ export function ProfilePanel({
 }: Props) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
-      <div className="flex flex-col gap-1.5 sm:col-span-2">
+      <div className="flex flex-col gap-1.5">
         <Label htmlFor="registry">Target registry</Label>
         <Input
           id="registry"
-          placeholder="registry.cn-shanghai.aliyuncs.com/your-namespace"
+          placeholder="crpi-xxx.cn-shanghai.personal.cr.aliyuncs.com"
           value={profile.registry}
           onChange={(e) =>
             onProfileChange({ ...profile, registry: e.target.value })
           }
         />
         <p className="text-muted-foreground text-xs">
-          Mirror destination. Combined with each entry's target path to form
-          the full image reference.
+          Mirror destination registry host.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="namespace">Namespace</Label>
+        <Input
+          id="namespace"
+          placeholder="e.g. warjiang"
+          value={profile.namespace ?? ''}
+          onChange={(e) =>
+            onProfileChange({ ...profile, namespace: e.target.value })
+          }
+        />
+        <p className="text-muted-foreground text-xs">
+          Registry namespace prefix added to each target path.
         </p>
       </div>
       <div className="flex flex-col gap-1.5">

@@ -46,6 +46,7 @@ export function ProfilesPage({ config, setConfig }: Props) {
       return (
         name.toLowerCase().includes(q) ||
         p.registry.toLowerCase().includes(q) ||
+        (p.namespace?.toLowerCase().includes(q) ?? false) ||
         (p.username?.toLowerCase().includes(q) ?? false)
       )
     })
