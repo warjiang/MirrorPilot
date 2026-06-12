@@ -629,6 +629,9 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
         if (!requestedImageIds) requestedImageIds = ids
         else requestedImageIds.push(...ids)
       }
+      if ('image_ids' in body && Array.isArray(body.image_ids)) {
+        requestedImageIds = body.image_ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+      }
     }
   }
 
