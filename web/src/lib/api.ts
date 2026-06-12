@@ -102,11 +102,16 @@ export async function detect(req: DetectRequest): Promise<DetectResponse> {
   return (await res.json()) as DetectResponse
 }
 
-export async function triggerSync(draft?: MirrorConfig): Promise<TriggerSyncResponse> {
+export async function triggerSync(draft?: MirrorConfig, imageIds?: number[]): Promise<TriggerSyncResponse> {
+  const payload: Record<string, unknown> = {}
+  if (draft) payload.draft = toV2Payload(draft)
+  if (imageIds?.length) payload.image_ids = imageIds
+
+  const hasBody = Object.keys(payload).length > 0
   const res = await fetch('/api/sync/trigger', {
     method: 'POST',
-    headers: draft ? { 'content-type': 'application/json' } : undefined,
-    body: draft ? JSON.stringify({ draft: toV2Payload(draft) }) : undefined,
+    headers: hasBody ? { 'content-type': 'application/json' } : undefined,
+    body: hasBody ? JSON.stringify(payload) : undefined,
   })
   const body = await res.json().catch(() => ({})) as TriggerSyncResponse & { error?: string }
   if (!res.ok) {
@@ -114,4 +119,9 @@ export async function triggerSync(draft?: MirrorConfig): Promise<TriggerSyncResp
     throw new Error(detail ? `sync trigger failed: ${detail}` : `sync trigger failed (HTTP ${res.status})`)
   }
   return body
+}
+
+export async function deleteImage(imageId: number): Promise<{ ok: boolean }> {
+  const res = await fetch(`/api/images/${imageId}`, { method: 'DELETE' })
+  return jsonOrThrow(res, 'delete image')
 }

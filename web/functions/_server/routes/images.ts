@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, like, or, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
 import type { Db } from '../db'
@@ -41,6 +41,9 @@ interface ImageEntity {
   default_target: string
   is_active: number
   notes: string
+  last_sync_status: string
+  last_sync_at: string | null
+  last_error: string
   created_at: string
   updated_at: string
 }
@@ -48,15 +51,7 @@ interface ImageEntity {
 interface UserImageLink {
   user_id: number
   image_id: number
-  enabled: number
-  pinned: number
-  target_override: string | null
-  notes: string
-  last_sync_status: string
-  last_sync_at: string | null
-  last_error: string
   created_at: string
-  updated_at: string
 }
 
 interface ImageProfileLink {
@@ -75,8 +70,6 @@ interface ImageRow {
   target: string
   profile: string
   enabled: number
-  pinned: number
-  synced: number
   status: string | null
   syncError: string | null
   notes: string
@@ -113,13 +106,6 @@ export interface V2ConfigPayload {
     image_id?: number
     source?: string
     default_target?: string
-    target_override?: string | null
-    enabled?: number | boolean
-    pinned?: number | boolean
-    notes?: string
-    last_sync_status?: string
-    last_sync_at?: string | null
-    last_error?: string
   }>
   image_profiles: Array<{
     image_id?: number
@@ -140,8 +126,7 @@ function mapRowToImage(row: ImageRow): ImageEntry {
     target: row.target,
     profile: row.profile,
     enabled: row.enabled === 1,
-    pinned: row.pinned === 1 ? true : undefined,
-    synced: row.synced === 1 ? true : undefined,
+    synced: row.status === 'synced' ? true : undefined,
     status:
       row.status === 'pending' || row.status === 'syncing' || row.status === 'synced' || row.status === 'failed'
         ? row.status
@@ -225,6 +210,9 @@ async function loadUserState(db: Db, userId: number) {
         default_target: images.target,
         is_active: images.isActive,
         notes: images.notes,
+        last_sync_status: images.lastSyncStatus,
+        last_sync_at: images.lastSyncAt,
+        last_error: images.lastError,
         created_at: images.createdAt,
         updated_at: images.updatedAt,
       })
@@ -234,19 +222,11 @@ async function loadUserState(db: Db, userId: number) {
       .select({
         user_id: userImages.userId,
         image_id: userImages.imageId,
-        enabled: userImages.enabled,
-        pinned: userImages.pinned,
-        target_override: userImages.targetOverride,
-        notes: userImages.notes,
-        last_sync_status: userImages.lastSyncStatus,
-        last_sync_at: userImages.lastSyncAt,
-        last_error: userImages.lastError,
         created_at: userImages.createdAt,
-        updated_at: userImages.updatedAt,
       })
       .from(userImages)
-      .where(eq(userImages.userId, userId))
-      .orderBy(desc(userImages.pinned), desc(userImages.updatedAt)),
+      .where(and(eq(userImages.userId, userId), isNull(userImages.deletedAt)))
+      .orderBy(desc(userImages.createdAt)),
     db
       .select({
         image_id: imageProfiles.imageId,
@@ -433,14 +413,14 @@ export async function materializeV2Config(db: Db, userId: number, body: V2Config
     }
   }
 
-  const resolveImageId = (row: { image_id?: number; source?: string; default_target?: string; target_override?: string | null }): number | null => {
+  const resolveImageId = (row: { image_id?: number; source?: string; default_target?: string }): number | null => {
     if (typeof row.image_id === 'number' && Number.isFinite(row.image_id) && row.image_id > 0) {
       const mapped = imageIdByClientId.get(Math.trunc(row.image_id))
       if (mapped) return mapped
     }
 
     const source = String(row.source || '').trim()
-    const defaultTarget = String(row.default_target || row.target_override || '').trim()
+    const defaultTarget = String(row.default_target || '').trim()
     if (!source || !defaultTarget) return null
     return imageIdByKey.get(imageKey(source, defaultTarget)) || null
   }
@@ -494,13 +474,6 @@ export async function materializeV2Config(db: Db, userId: number, body: V2Config
       db.insert(userImages).values({
         userId,
         imageId,
-        enabled: asBool01(ui.enabled, 1),
-        pinned: asBool01(ui.pinned, 0),
-        targetOverride: ui.target_override ?? null,
-        notes: String(ui.notes || ''),
-        lastSyncStatus: String(ui.last_sync_status || 'pending'),
-        lastSyncAt: ui.last_sync_at ?? null,
-        lastError: String(ui.last_error || ''),
       })
     )
   }
@@ -554,6 +527,22 @@ imagesRoutes.get('/', getConfigHandler)
 imagesRoutes.put('/', putConfigHandler)
 imagesRoutes.post('/materialize', putConfigHandler)
 
+imagesRoutes.delete('/:id', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('user').id
+  const imageId = Number.parseInt(c.req.param('id'), 10)
+  if (!Number.isFinite(imageId) || imageId <= 0) {
+    return c.json({ error: 'invalid image id' }, 400)
+  }
+
+  // Remove the user-image association
+  await db
+    .delete(userImages)
+    .where(and(eq(userImages.userId, userId), eq(userImages.imageId, imageId)))
+
+  return c.json({ ok: true })
+})
+
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 
@@ -588,27 +577,25 @@ imagesRoutes.get('/search', async (c) => {
   const filterExpr = q
     ? and(
         eq(userImages.userId, userId),
+        isNull(userImages.deletedAt),
         or(
           like(images.source, pattern),
           like(images.target, pattern),
-          like(userImages.targetOverride, pattern),
-          like(userImages.notes, pattern)
+          like(images.notes, pattern)
         )
       )
-    : eq(userImages.userId, userId)
+    : and(eq(userImages.userId, userId), isNull(userImages.deletedAt))
 
   const userRows = await db
     .select({
       imageId: userImages.imageId,
-      enabled: userImages.enabled,
-      pinned: userImages.pinned,
-      targetOverride: userImages.targetOverride,
-      notes: userImages.notes,
-      lastSyncStatus: userImages.lastSyncStatus,
-      lastSyncAt: userImages.lastSyncAt,
-      lastError: userImages.lastError,
+      lastSyncStatus: images.lastSyncStatus,
+      lastSyncAt: images.lastSyncAt,
+      lastError: images.lastError,
       imageSource: images.source,
       imageTarget: images.target,
+      imageNotes: images.notes,
+      imageIsActive: images.isActive,
       imageCreatedAt: images.createdAt,
     })
     .from(userImages)
@@ -625,14 +612,12 @@ imagesRoutes.get('/search', async (c) => {
     return {
       id: row.imageId,
       source: row.imageSource,
-      target: row.targetOverride || row.imageTarget,
+      target: row.imageTarget,
       profile: profile?.name || 'default',
-      enabled: row.enabled,
-      pinned: row.pinned,
-      synced: row.lastSyncStatus === 'synced' ? 1 : 0,
+      enabled: row.imageIsActive,
       status: row.lastSyncStatus,
       syncError: row.lastError,
-      notes: row.notes,
+      notes: row.imageNotes,
       createdAt: row.imageCreatedAt,
       syncedAt: row.lastSyncAt,
     }

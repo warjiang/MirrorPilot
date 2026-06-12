@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { AppEnv } from '../types'
 import { imageProfiles, images, profiles, sessions, userImages, userProfiles, users } from '../db/schema'
 import { defaultAvatarUrl } from '../lib/avatar'
@@ -21,7 +21,7 @@ adminRoutes.get('/users', async (c) => {
       created_at: users.createdAt,
       has_github: sql<number>`(${isNotNull(users.githubId)})`,
       has_password: sql<number>`(${isNotNull(users.passwordHash)})`,
-      image_count: sql<number>`(SELECT COUNT(*) FROM ${userImages} WHERE ${userImages.userId} = ${users.id})`,
+      image_count: sql<number>`(SELECT COUNT(*) FROM ${userImages} WHERE ${userImages.userId} = ${users.id} AND ${userImages.deletedAt} IS NULL)`,
     })
     .from(users)
     .orderBy(desc(users.createdAt))
@@ -137,17 +137,17 @@ adminRoutes.get('/images', async (c) => {
       id: images.id,
       source: images.source,
       target: images.target,
-      enabled: userImages.enabled,
-      synced: sql<number>`CASE WHEN ${userImages.lastSyncStatus} = 'synced' THEN 1 ELSE 0 END`,
-      notes: userImages.notes,
+      synced: sql<number>`CASE WHEN ${images.lastSyncStatus} = 'synced' THEN 1 ELSE 0 END`,
+      notes: images.notes,
       created_at: images.createdAt,
-      synced_at: userImages.lastSyncAt,
+      synced_at: images.lastSyncAt,
       owner_email: users.email,
       owner_name: users.name,
     })
     .from(userImages)
     .innerJoin(images, eq(images.id, userImages.imageId))
     .innerJoin(users, eq(users.id, userImages.userId))
+    .where(isNull(userImages.deletedAt))
     .orderBy(desc(images.createdAt))
 
   const imageIds = [...new Set(rows.map((r) => r.id))]
