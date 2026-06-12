@@ -55,6 +55,7 @@ export function EntriesTable({
         source: entry.source,
         targetRegistry: profile?.registry ?? '',
         target: entry.target,
+        namespace: profile?.namespace,
         username: creds?.username,
         password: creds?.password,
       })
@@ -107,7 +108,8 @@ export function EntriesTable({
             const state = rows[index]
             const fullTarget = buildFullTarget(
               profiles[entry.profile]?.registry ?? '',
-              entry.target
+              entry.target,
+              profiles[entry.profile]?.namespace
             )
             return (
               <TableRow key={`${entry.source}-${entry.target}-${index}`}>

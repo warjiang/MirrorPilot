@@ -69,6 +69,7 @@ export interface DetectRequest {
   source: string
   targetRegistry: string
   target: string
+  namespace?: string
   username?: string
   password?: string
 }

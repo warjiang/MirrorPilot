@@ -131,11 +131,13 @@ export function deriveTarget(source: string): string {
   return `${parsed.repository}${tagSuffix}`
 }
 
-/** Build the fully-qualified target image from a registry + target path. */
-export function buildFullTarget(registry: string, target: string): string {
+/** Build the fully-qualified target image from a registry + namespace + target path. */
+export function buildFullTarget(registry: string, target: string, namespace?: string): string {
   const reg = registry.replace(/\/+$/, '').trim()
+  const ns = (namespace || '').replace(/^\/+|\/+$/g, '').trim()
   const t = target.replace(/^\/+/, '').trim()
-  if (reg === '') return t
-  if (t === '') return reg
-  return `${reg}/${t}`
+  const path = ns ? `${ns}/${t}` : t
+  if (reg === '') return path
+  if (path === '') return reg
+  return `${reg}/${path}`
 }

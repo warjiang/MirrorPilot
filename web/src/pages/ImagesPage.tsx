@@ -672,7 +672,7 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                           </TableCell>
                           <TableCell className="py-2 overflow-hidden">
                             <span className="block truncate font-mono text-xs text-muted-foreground" title={row.image.target}>
-                              {buildFullTarget(config.profiles[row.image.profile]?.registry ?? '', row.image.target)}
+                              {buildFullTarget(config.profiles[row.image.profile]?.registry ?? '', row.image.target, config.profiles[row.image.profile]?.namespace)}
                             </span>
                           </TableCell>
                           <TableCell className="py-2 overflow-hidden">
@@ -723,7 +723,7 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                   </TableHeader>
                   <TableBody>
                     {visibleRows.map(({ img: entry, i: originalIndex }) => {
-                      const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target)
+                      const fullTarget = buildFullTarget(config.profiles[entry.profile]?.registry ?? '', entry.target, config.profiles[entry.profile]?.namespace)
                       const actionsDisabled = originalIndex < 0
                       return (
                         <TableRow
