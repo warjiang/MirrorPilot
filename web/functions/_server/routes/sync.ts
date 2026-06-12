@@ -54,6 +54,7 @@ async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: numb
     profileId: number
     profileName: string
     registry: string
+    namespace: string
     username: string
     password: string
   }>()
@@ -64,6 +65,7 @@ async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: numb
       profileId: profiles.id,
       profileName: profiles.name,
       registry: profiles.registry,
+      namespace: profiles.namespace,
       username: profiles.username,
       password: profiles.passwordSecret,
       isDefault: imageProfiles.isDefault,
@@ -93,6 +95,7 @@ async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: numb
     profileId: number
     profileName: string
     registry: string
+    namespace: string
     username: string
     password: string
   }>()
@@ -103,6 +106,7 @@ async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: numb
         profileId: row.profileId,
         profileName: row.profileName,
         registry: row.registry,
+        namespace: row.namespace,
         username: row.username,
         password: row.password,
       })
@@ -150,10 +154,12 @@ syncRoutes.get('/pending', async (c) => {
 
   const rows = uiRows.map((row) => {
     const profile = profileChoices.get(row.imageId)
+    const target = row.targetOverride || row.target
+    const targetWithNs = profile?.namespace ? `${profile.namespace}/${target}` : target
     return {
       id: row.imageId,
       source: row.source,
-      target: row.targetOverride || row.target,
+      target: targetWithNs,
       profile: profile?.profileName || 'default',
       registry: profile?.registry || '',
       username_env: profile?.username || '',
@@ -502,6 +508,7 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
         profileId: profile.profileId,
         profile: profile.profileName,
         registry: profile.registry,
+        namespace: profile.namespace,
         username_env: profile.username,
         password_env: profile.password,
       }
@@ -512,14 +519,17 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
     return c.json({ ok: false, message: 'No images to sync' })
   }
 
-  const payload = rows.map((row) => ({
-    id: row.id,
-    source: row.source,
-    target: row.target,
-    registry: row.registry || '',
-    username: row.username_env || '',
-    password: row.password_env || '',
-  }))
+  const payload = rows.map((row) => {
+    const targetWithNs = row.namespace ? `${row.namespace}/${row.target}` : row.target
+    return {
+      id: row.id,
+      source: row.source,
+      target: targetWithNs,
+      registry: row.registry || '',
+      username: row.username_env || '',
+      password: row.password_env || '',
+    }
+  })
 
   const jobId = crypto.randomUUID()
   const requestId = c.req.header('X-Request-Id') || crypto.randomUUID()
@@ -534,7 +544,8 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
   ]
 
   for (const row of rows) {
-    const fullTarget = row.registry ? `${row.registry}/${row.target}` : row.target
+    const targetWithNs = row.namespace ? `${row.namespace}/${row.target}` : row.target
+    const fullTarget = row.registry ? `${row.registry}/${targetWithNs}` : targetWithNs
     jobStatements.push(
       db.insert(jobItems).values({
         jobId,

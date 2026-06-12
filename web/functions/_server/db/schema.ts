@@ -75,6 +75,7 @@ export const profiles = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     name: text('name').notNull(),
     registry: text('registry').notNull().default(''),
+    namespace: text('namespace').notNull().default(''),
     authType: text('auth_type').notNull().default('basic'),
     username: text('username').notNull().default(''),
     passwordSecret: text('password_secret').notNull().default(''),

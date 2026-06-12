@@ -2,6 +2,7 @@
 
 export interface RegistryProfile {
   registry: string
+  namespace?: string
   username?: string
   password?: string
 }

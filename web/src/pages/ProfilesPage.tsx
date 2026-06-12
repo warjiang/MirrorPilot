@@ -18,11 +18,12 @@ interface Props {
 interface FormState {
   name: string
   registry: string
+  namespace: string
   username: string
   password: string
 }
 
-const emptyForm: FormState = { name: '', registry: '', username: '', password: '' }
+const emptyForm: FormState = { name: '', registry: '', namespace: '', username: '', password: '' }
 
 export function ProfilesPage({ config, setConfig }: Props) {
   const [editing, setEditing] = useState<string | null>(null)
@@ -71,7 +72,7 @@ export function ProfilesPage({ config, setConfig }: Props) {
     const p = config.profiles[name]
     setEditing(name)
     setCreating(false)
-    setForm({ name, registry: p.registry, username: p.username ?? '', password: p.password ?? '' })
+    setForm({ name, registry: p.registry, namespace: p.namespace ?? '', username: p.username ?? '', password: p.password ?? '' })
     setError(null)
     setShowPassword(false)
   }
@@ -92,6 +93,7 @@ export function ProfilesPage({ config, setConfig }: Props) {
 
     const profile: RegistryProfile = {
       registry: form.registry.trim(),
+      namespace: form.namespace.trim() || undefined,
       username: form.username.trim() || undefined,
       password: form.password || undefined,
     }
@@ -254,6 +256,10 @@ export function ProfilesPage({ config, setConfig }: Props) {
                         <p className="font-mono">{p.registry || '—'}</p>
                       </div>
                       <div>
+                        <span className="text-muted-foreground text-xs">Namespace</span>
+                        <p className="font-mono">{p.namespace || '—'}</p>
+                      </div>
+                      <div>
                         <span className="text-muted-foreground text-xs">Username</span>
                         <p className="font-mono">{p.username || '—'}</p>
                       </div>
@@ -326,7 +332,15 @@ function ProfileForm({
           <Input
             value={form.registry}
             onChange={(e) => setForm({ ...form, registry: e.target.value })}
-            placeholder="e.g. registry.cn-shanghai.aliyuncs.com/namespace"
+            placeholder="e.g. crpi-xxx.cn-shanghai.personal.cr.aliyuncs.com"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Namespace</Label>
+          <Input
+            value={form.namespace}
+            onChange={(e) => setForm({ ...form, namespace: e.target.value })}
+            placeholder="e.g. warjiang"
           />
         </div>
         <div className="flex flex-col gap-1.5">
