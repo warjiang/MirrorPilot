@@ -12,7 +12,6 @@ import {
   profiles,
   syncJobEvents,
   userImages,
-  userProfiles,
 } from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
 import { githubHeaders } from '../lib/github'
@@ -73,10 +72,6 @@ async function loadProfileChoiceForImages(db: Db, userId: number, imageIds: numb
     })
     .from(imageProfiles)
     .innerJoin(profiles, eq(profiles.id, imageProfiles.profileId))
-    .innerJoin(
-      userProfiles,
-      and(eq(userProfiles.profileId, profiles.id), eq(userProfiles.userId, userId), eq(userProfiles.enabled, 1))
-    )
     .where(
       and(
         inArray(imageProfiles.imageId, imageIds),

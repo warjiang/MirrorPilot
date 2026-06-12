@@ -77,16 +77,15 @@ function fromV2(payload: ConfigV2Response): MirrorConfig {
   const profilesById = new Map<number, ConfigV2Profile>()
   for (const p of payload.profiles || []) profilesById.set(Number(p.id), p)
 
+  // All active profiles are globally shared — no user_profiles filtering needed
   const profileMap: MirrorConfig['profiles'] = {}
-  for (const link of payload.user_profiles || []) {
-    if (Number(link.enabled) !== 1) continue
-    const profile = profilesById.get(Number(link.profile_id))
-    if (!profile?.name) continue
-    profileMap[profile.name] = {
-      registry: String(profile.registry || ''),
-      namespace: profile.namespace || undefined,
-      username: profile.username || undefined,
-      password: profile.password_secret || undefined,
+  for (const p of payload.profiles || []) {
+    if (!p.name || !Number(p.is_active)) continue
+    profileMap[p.name] = {
+      registry: String(p.registry || ''),
+      namespace: p.namespace || undefined,
+      username: p.username || undefined,
+      password: p.password_secret || undefined,
     }
   }
 
