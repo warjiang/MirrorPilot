@@ -12,11 +12,158 @@ import {
   profiles,
   syncJobEvents,
   userImages,
+  userProfiles,
 } from '../db/schema'
 import { authMiddleware } from '../middleware/auth'
 import { githubHeaders } from '../lib/github'
-import { isV2ConfigPayload, materializeV2Config } from './images'
+import { isV2ConfigPayload } from './images'
 import type { V2ConfigPayload } from './images'
+
+/**
+ * Additively materialize draft images from a V2ConfigPayload without deleting
+ * existing user data. Only inserts new profiles/images/associations that don't
+ * already exist.
+ */
+async function materializeDraftImages(db: Db, userId: number, body: V2ConfigPayload): Promise<number[]> {
+  const newImageIds: number[] = []
+  const profileIdsByName = new Map<string, number>()
+
+  // Upsert profiles (same logic as full materialize but without delete)
+  for (const p of body.profiles) {
+    const name = String(p.name || '').trim()
+    if (!name) continue
+
+    await db
+      .insert(profiles)
+      .values({
+        name,
+        registry: String(p.registry || '').trim(),
+        namespace: String(p.namespace || '').trim(),
+        authType: String(p.auth_type || 'basic'),
+        username: String(p.username || ''),
+        passwordSecret: String(p.password_secret || ''),
+        isActive: typeof p.is_active === 'boolean' ? (p.is_active ? 1 : 0) : (p.is_active ?? 1),
+      })
+      .onConflictDoUpdate({
+        target: profiles.name,
+        set: {
+          registry: String(p.registry || '').trim(),
+          namespace: String(p.namespace || '').trim(),
+          authType: String(p.auth_type || 'basic'),
+          username: String(p.username || ''),
+          passwordSecret: String(p.password_secret || ''),
+          isActive: typeof p.is_active === 'boolean' ? (p.is_active ? 1 : 0) : (p.is_active ?? 1),
+          updatedAt: sql`datetime('now')`,
+        },
+      })
+  }
+
+  // Resolve profile names to IDs
+  const profileNames = body.profiles.map((p) => String(p.name || '').trim()).filter(Boolean)
+  if (profileNames.length > 0) {
+    const existingProfiles = await db
+      .select({ id: profiles.id, name: profiles.name })
+      .from(profiles)
+      .where(inArray(profiles.name, profileNames))
+    for (const row of existingProfiles) {
+      profileIdsByName.set(row.name, row.id)
+    }
+  }
+
+  // Insert images and user associations additively
+  for (const img of body.images) {
+    const source = String(img.source || '').trim()
+    const target = String(img.default_target || '').trim()
+    if (!source || !target) continue
+
+    // Check if image already exists
+    const byKey = await db
+      .select({ id: images.id })
+      .from(images)
+      .where(and(eq(images.source, source), eq(images.target, target)))
+      .limit(1)
+
+    let imageId: number | null
+    if (byKey[0]) {
+      imageId = byKey[0].id
+    } else {
+      const inserted = await db
+        .insert(images)
+        .values({
+          source,
+          target,
+          isActive: typeof img.is_active === 'boolean' ? (img.is_active ? 1 : 0) : (img.is_active ?? 1),
+          notes: String(img.notes || ''),
+        })
+        .returning({ id: images.id })
+      imageId = inserted[0]?.id || null
+    }
+
+    if (!imageId) continue
+    newImageIds.push(imageId)
+
+    // Insert user_images association if not exists (handle soft-delete restore)
+    const existing = await db
+      .select({ imageId: userImages.imageId, deletedAt: userImages.deletedAt })
+      .from(userImages)
+      .where(and(eq(userImages.userId, userId), eq(userImages.imageId, imageId)))
+      .limit(1)
+
+    if (existing[0]) {
+      if (existing[0].deletedAt) {
+        // Restore soft-deleted association
+        await db
+          .update(userImages)
+          .set({ deletedAt: null })
+          .where(and(eq(userImages.userId, userId), eq(userImages.imageId, imageId)))
+      }
+    } else {
+      await db.insert(userImages).values({ userId, imageId })
+    }
+
+    // Ensure user_profiles link exists
+    for (const profileId of profileIdsByName.values()) {
+      await db
+        .insert(userProfiles)
+        .values({ userId, profileId, enabled: 1, grantedBy: userId })
+        .onConflictDoNothing()
+    }
+
+    // Set up image_profiles for this image
+    // Match by client-side image_id (from body.images index) to find the profile assignment
+    const clientImageId = typeof img.id === 'number' && Number.isFinite(img.id) ? img.id : null
+    const ipEntry = clientImageId
+      ? body.image_profiles.find((ip) => ip.image_id === clientImageId)
+      : body.image_profiles.find((ip) => ip.source === img.source && ip.default_target === img.default_target)
+    const profileNameForImage = ipEntry?.profile_name
+    const profileIdForImage = profileNameForImage
+      ? profileIdsByName.get(profileNameForImage)
+      : (ipEntry?.profile_id
+        ? [...profileIdsByName.values()].find((id) => id === ipEntry.profile_id)
+        : null)
+    const resolvedProfileId = profileIdForImage ?? (profileIdsByName.values().next().value ?? null)
+
+    if (resolvedProfileId) {
+      const ipExists = await db
+        .select({ imageId: imageProfiles.imageId })
+        .from(imageProfiles)
+        .where(and(eq(imageProfiles.imageId, imageId), eq(imageProfiles.profileId, resolvedProfileId)))
+        .limit(1)
+
+      if (!ipExists[0]) {
+        await db.insert(imageProfiles).values({
+          imageId,
+          profileId: resolvedProfileId,
+          enabled: 1,
+          priority: 0,
+          isDefault: 1,
+        })
+      }
+    }
+  }
+
+  return newImageIds
+}
 
 export const syncRoutes = new Hono<AppEnv>()
 
@@ -469,12 +616,25 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
     if (body && typeof body === 'object') {
       const draft = 'draft' in body ? body.draft : body
       if (isV2ConfigPayload(draft)) {
-        await materializeV2Config(db, userId, draft)
+        // Use additive materialization to avoid wiping existing images
+        const materializedIds = await materializeDraftImages(db, userId, draft)
+        // Include newly materialized image IDs in the sync request
+        if (materializedIds.length > 0) {
+          if (!requestedImageIds) requestedImageIds = []
+          requestedImageIds.push(...materializedIds)
+        }
       }
       if ('image_ids' in body && Array.isArray(body.image_ids)) {
-        requestedImageIds = body.image_ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+        const ids = body.image_ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+        if (!requestedImageIds) requestedImageIds = ids
+        else requestedImageIds.push(...ids)
       }
     }
+  }
+
+  // Deduplicate requested image IDs
+  if (requestedImageIds?.length) {
+    requestedImageIds = [...new Set(requestedImageIds)]
   }
 
   const baseFilter = and(eq(userImages.userId, userId), isNull(userImages.deletedAt), eq(images.isActive, 1))
