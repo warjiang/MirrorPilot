@@ -77,3 +77,28 @@ export async function getOrCreateUserByEmail(db: Db, email: string) {
   if (!user) throw new Error('failed to create user')
   return user
 }
+
+export async function getOrCreateUserByEmailWithAdmin(
+  db: Db,
+  email: string,
+  adminEmail?: string
+) {
+  const normalized = email.toLowerCase().trim()
+  const isAdmin = !!adminEmail && normalized === adminEmail.toLowerCase().trim()
+
+  await db.insert(users).values({ email: normalized }).onConflictDoNothing({ target: users.email })
+  const user = await getUserByEmail(db, normalized)
+  if (!user) throw new Error('failed to create user')
+
+  if (isAdmin && (user.isAdmin !== 1 || user.status !== 'active')) {
+    await db
+      .update(users)
+      .set({ isAdmin: 1, status: 'active' })
+      .where(eq(users.id, user.id))
+    const refreshed = await getUserByEmail(db, normalized)
+    if (!refreshed) throw new Error('failed to refresh user')
+    return refreshed
+  }
+
+  return user
+}

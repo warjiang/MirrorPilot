@@ -4,7 +4,7 @@ Web console for MirrorPilot image mirror management, built on Cloudflare Pages +
 
 ## What it does
 
-- Manage mirror entries (`source -> target`) and registry profiles
+- Manage image entries (`source -> target`) and registry profiles
 - Run source/registry checks from the browser
 - Trigger GitHub Actions sync jobs from UI
 - Track sync job progress/status

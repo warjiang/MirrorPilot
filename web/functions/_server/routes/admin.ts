@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { desc, eq, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import type { AppEnv } from '../types'
-import { images, profiles, registrySecrets, sessions, users } from '../db/schema'
+import { imageProfiles, images, profiles, sessions, userImages, userProfiles, users } from '../db/schema'
 import { defaultAvatarUrl } from '../lib/avatar'
 
 const VALID_STATUSES = ['pending', 'active', 'disabled']
@@ -21,7 +21,7 @@ adminRoutes.get('/users', async (c) => {
       created_at: users.createdAt,
       has_github: sql<number>`(${isNotNull(users.githubId)})`,
       has_password: sql<number>`(${isNotNull(users.passwordHash)})`,
-      image_count: sql<number>`(SELECT COUNT(*) FROM ${images} WHERE ${images.userId} = ${users.id})`,
+      image_count: sql<number>`(SELECT COUNT(*) FROM ${userImages} WHERE ${userImages.userId} = ${users.id})`,
     })
     .from(users)
     .orderBy(desc(users.createdAt))
@@ -121,9 +121,8 @@ adminRoutes.delete('/users/:id', async (c) => {
 
   await db.batch([
     db.delete(sessions).where(eq(sessions.userId, targetId)),
-    db.delete(images).where(eq(images.userId, targetId)),
-    db.delete(profiles).where(eq(profiles.userId, targetId)),
-    db.delete(registrySecrets).where(eq(registrySecrets.userId, targetId)),
+    db.delete(userProfiles).where(eq(userProfiles.userId, targetId)),
+    db.delete(userImages).where(eq(userImages.userId, targetId)),
     db.delete(users).where(eq(users.id, targetId)),
   ])
 
@@ -132,23 +131,51 @@ adminRoutes.delete('/users/:id', async (c) => {
 
 adminRoutes.get('/images', async (c) => {
   const db = c.get('db')
+
   const rows = await db
     .select({
       id: images.id,
       source: images.source,
       target: images.target,
-      profile: images.profile,
-      enabled: images.enabled,
-      synced: images.synced,
-      notes: images.notes,
+      enabled: userImages.enabled,
+      synced: sql<number>`CASE WHEN ${userImages.lastSyncStatus} = 'synced' THEN 1 ELSE 0 END`,
+      notes: userImages.notes,
       created_at: images.createdAt,
-      synced_at: images.syncedAt,
+      synced_at: userImages.lastSyncAt,
       owner_email: users.email,
       owner_name: users.name,
     })
-    .from(images)
-    .innerJoin(users, eq(users.id, images.userId))
+    .from(userImages)
+    .innerJoin(images, eq(images.id, userImages.imageId))
+    .innerJoin(users, eq(users.id, userImages.userId))
     .orderBy(desc(images.createdAt))
 
-  return c.json({ images: rows })
+  const imageIds = [...new Set(rows.map((r) => r.id))]
+  const profileRows = imageIds.length
+    ? await db
+        .select({
+          image_id: imageProfiles.imageId,
+          profile_name: profiles.name,
+          is_default: imageProfiles.isDefault,
+          priority: imageProfiles.priority,
+        })
+        .from(imageProfiles)
+        .innerJoin(profiles, eq(profiles.id, imageProfiles.profileId))
+        .where(and(inArray(imageProfiles.imageId, imageIds), eq(imageProfiles.enabled, 1)))
+        .orderBy(desc(imageProfiles.isDefault), asc(imageProfiles.priority))
+    : []
+
+  const profileByImageId = new Map<number, string>()
+  for (const row of profileRows) {
+    if (!profileByImageId.has(row.image_id)) {
+      profileByImageId.set(row.image_id, row.profile_name)
+    }
+  }
+
+  return c.json({
+    images: rows.map((row) => ({
+      ...row,
+      profile: profileByImageId.get(row.id) || 'default',
+    })),
+  })
 })

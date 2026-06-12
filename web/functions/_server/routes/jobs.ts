@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
 import { unzipSync, strFromU8 } from 'fflate'
-import { and, eq, inArray, lt, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
 import type { Db } from '../db'
 import type { Env } from '../env'
-import { images, jobItems, jobs } from '../db/schema'
+import { jobItems, jobs, syncJobEvents, userImages } from '../db/schema'
 import { githubHeaders } from '../lib/github'
 
 export const jobsRoutes = new Hono<AppEnv>()
@@ -41,7 +41,6 @@ const STALE_MINUTES = 30
 async function reconcile(db: Db, env: Env, job: JobRow): Promise<JobRow> {
   if (!['dispatched', 'running'].includes(job.status)) return job
 
-  // Dispatched but never started: mark failed after timeout
   if (!job.github_run_id) {
     const stale = await db
       .select({ id: jobs.id })
@@ -58,7 +57,6 @@ async function reconcile(db: Db, env: Env, job: JobRow): Promise<JobRow> {
     return job
   }
 
-  // Running: check whether the GitHub run already finished
   const res = await fetch(
     `https://api.github.com/repos/${env.GITHUB_REPO}/actions/runs/${job.github_run_id}`,
     { headers: githubHeaders(env) }
@@ -67,7 +65,6 @@ async function reconcile(db: Db, env: Env, job: JobRow): Promise<JobRow> {
   const run = (await res.json()) as { status: string; conclusion: string | null }
   if (run.status !== 'completed') return job
 
-  // Run finished but no complete callback arrived — finalize from item counts
   const countRows = await db
     .select({
       success: sql<number>`SUM(CASE WHEN status = 'succeeded' THEN 1 ELSE 0 END)`,
@@ -108,16 +105,30 @@ async function reconcile(db: Db, env: Env, job: JobRow): Promise<JobRow> {
       })
       .where(eq(jobs.id, job.id)),
     db
-      .update(images)
-      .set({ status: 'pending' })
+      .update(userImages)
+      .set({
+        lastSyncStatus: status === 'cancelled' ? 'pending' : 'failed',
+        lastError: status === 'cancelled' ? '' : (error || 'workflow completed without item callback'),
+      })
       .where(
         and(
-          eq(images.status, 'syncing'),
-          inArray(images.id, db.select({ id: jobItems.imageId }).from(jobItems).where(eq(jobItems.jobId, job.id)))
+          eq(userImages.lastSyncStatus, 'syncing'),
+          inArray(
+            userImages.imageId,
+            db.select({ id: jobItems.imageId }).from(jobItems).where(eq(jobItems.jobId, job.id))
+          )
         )
       ),
+    db.insert(syncJobEvents).values({
+      jobId: job.id,
+      eventType: 'job_reconciled',
+      eventSource: 'poller',
+      payloadJson: JSON.stringify({ status, success, failed, runConclusion: run.conclusion }),
+      message: 'job reconciled from GitHub run state',
+    }),
   ]
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
+
   return { ...job, status, image_success: success, image_failed: failed, error }
 }
 
@@ -133,7 +144,7 @@ jobsRoutes.get('/', async (c) => {
       .select(jobSelection)
       .from(jobs)
       .where(eq(jobs.userId, userId))
-      .orderBy(sql`created_at DESC`, sql`id DESC`)
+      .orderBy(desc(jobs.createdAt), desc(jobs.id))
       .limit(limit)
       .offset(offset),
     db.select({ total: sql<number>`COUNT(*)` }).from(jobs).where(eq(jobs.userId, userId)),
@@ -186,6 +197,60 @@ jobsRoutes.get('/:id', async (c) => {
   return c.json({ job: { ...job, run_url: runUrl }, items })
 })
 
+jobsRoutes.get('/:id/events', async (c) => {
+  const db = c.get('db')
+  const userId = c.get('user').id
+  const jobId = c.req.param('id')
+
+  const exists = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(eq(jobs.id, jobId), eq(jobs.userId, userId)))
+    .limit(1)
+  if (!exists[0]) {
+    return c.json({ error: 'Job not found' }, 404)
+  }
+
+  const limit = Math.min(Math.max(parseInt(c.req.query('limit') || '100', 10) || 100, 1), 500)
+  const beforeId = Math.max(parseInt(c.req.query('beforeId') || '0', 10) || 0, 0)
+
+  const eventRows = await db
+    .select({
+      id: syncJobEvents.id,
+      job_item_id: syncJobEvents.jobItemId,
+      event_type: syncJobEvents.eventType,
+      event_source: syncJobEvents.eventSource,
+      payload_json: syncJobEvents.payloadJson,
+      http_status: syncJobEvents.httpStatus,
+      message: syncJobEvents.message,
+      created_at: syncJobEvents.createdAt,
+    })
+    .from(syncJobEvents)
+    .where(
+      beforeId > 0
+        ? and(eq(syncJobEvents.jobId, jobId), lt(syncJobEvents.id, beforeId))
+        : eq(syncJobEvents.jobId, jobId)
+    )
+    .orderBy(sql`id DESC`)
+    .limit(limit)
+
+  const items = eventRows.map((row) => ({
+    ...row,
+    payload: (() => {
+      try {
+        return JSON.parse(row.payload_json || '{}')
+      } catch {
+        return { raw: row.payload_json }
+      }
+    })(),
+  }))
+
+  return c.json({
+    events: items,
+    nextBeforeId: items.length ? items[items.length - 1].id : null,
+  })
+})
+
 jobsRoutes.post('/:id/cancel', async (c) => {
   const db = c.get('db')
   const userId = c.get('user').id
@@ -204,13 +269,11 @@ jobsRoutes.post('/:id/cancel', async (c) => {
     return c.json({ error: `Job is already ${job.status}` }, 409)
   }
 
-  // Cancel the GitHub workflow run if it exists
   if (job.github_run_id) {
     const res = await fetch(
       `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}/cancel`,
       { method: 'POST', headers: githubHeaders(c.env) }
     )
-    // 202 = accepted; 409 = run already completed — treat both as ok
     if (!res.ok && res.status !== 409) {
       const text = await res.text()
       return c.json({ error: `GitHub cancel failed: ${text}` }, 502)
@@ -226,22 +289,28 @@ jobsRoutes.post('/:id/cancel', async (c) => {
       .update(jobItems)
       .set({ status: 'cancelled', finishedAt: sql`datetime('now')` })
       .where(and(eq(jobItems.jobId, jobId), inArray(jobItems.status, ['pending', 'syncing']))),
-    // Reset images that were waiting on this job back to pending
     db
-      .update(images)
-      .set({ status: 'pending' })
+      .update(userImages)
+      .set({ lastSyncStatus: 'pending', lastError: '', lastSyncAt: null })
       .where(
         and(
-          eq(images.status, 'syncing'),
+          eq(userImages.lastSyncStatus, 'syncing'),
           inArray(
-            images.id,
+            userImages.imageId,
             db
               .select({ id: jobItems.imageId })
               .from(jobItems)
-              .where(and(eq(jobItems.jobId, jobId), eq(jobItems.status, 'cancelled')))
+              .where(eq(jobItems.jobId, jobId))
           )
         )
       ),
+    db.insert(syncJobEvents).values({
+      jobId,
+      eventType: 'job_cancelled',
+      eventSource: 'manual',
+      payloadJson: JSON.stringify({ githubRunId: job.github_run_id }),
+      message: 'job cancelled by user',
+    }),
   ])
 
   return c.json({ ok: true })
@@ -280,7 +349,6 @@ jobsRoutes.get('/:id/logs', async (c) => {
 
   const runUrl = `https://github.com/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`
 
-  // While running, full logs are not downloadable — return step progress instead
   const runRes = await fetch(
     `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}`,
     { headers: githubHeaders(c.env) }
@@ -310,7 +378,6 @@ jobsRoutes.get('/:id/logs', async (c) => {
     return c.json({ available: false, running: true, run_url: runUrl, steps })
   }
 
-  // Completed: download the logs archive (zip) and extract text
   const logsRes = await fetch(
     `https://api.github.com/repos/${c.env.GITHUB_REPO}/actions/runs/${job.github_run_id}/logs`,
     { headers: githubHeaders(c.env), redirect: 'follow' }
@@ -331,7 +398,6 @@ jobsRoutes.get('/:id/logs', async (c) => {
     return c.json({ available: false, run_url: runUrl, reason: 'Failed to extract logs archive' })
   }
 
-  // Top-level files like "0_Sync images from Web UI.txt" contain the merged per-job log
   const logs = Object.keys(files)
     .filter((name) => !name.includes('/') && name.endsWith('.txt'))
     .sort()

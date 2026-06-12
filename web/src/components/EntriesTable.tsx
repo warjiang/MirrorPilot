@@ -77,7 +77,7 @@ export function EntriesTable({
   if (entries.length === 0) {
     return (
       <p className="text-muted-foreground py-8 text-center text-sm">
-        No mirror entries yet. Add one above to get started.
+        No image entries yet. Add one above to get started.
       </p>
     )
   }

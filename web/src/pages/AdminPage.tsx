@@ -91,7 +91,7 @@ export function AdminPage() {
     )
   }
   if (!user || user.is_admin !== 1) {
-    return <Navigate to="/mirrors" replace />
+    return <Navigate to="/images" replace />
   }
 
   const patchUser = async (id: number, body: { status?: string; is_admin?: boolean }) => {
@@ -134,7 +134,7 @@ export function AdminPage() {
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Admin</h2>
           <p className="text-sm text-muted-foreground">
-            Manage users and review all mirror entries.
+            Manage users and review all image entries.
           </p>
         </div>
         <Button
@@ -266,7 +266,7 @@ export function AdminPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">All mirror entries ({images.length})</CardTitle>
+          <CardTitle className="text-base">All image entries ({images.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -300,7 +300,7 @@ export function AdminPage() {
               {!loading && images.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-sm text-muted-foreground">
-                    No mirror entries found.
+                    No image entries found.
                   </TableCell>
                 </TableRow>
               )}

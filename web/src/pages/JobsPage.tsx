@@ -500,7 +500,7 @@ export function JobsPage() {
                   {!jobs.length && (
                     <TableRow>
                       <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                        No sync jobs yet. Trigger a sync from the Mirrors page.
+                        No sync jobs yet. Trigger a sync from the Images page.
                       </TableCell>
                     </TableRow>
                   )}

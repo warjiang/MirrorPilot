@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
-/** Renders children only for admin users; others are redirected to /mirrors. */
+/** Renders children only for admin users; others are redirected to /images. */
 export function RequireAdmin({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
 
@@ -15,7 +15,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
     )
   }
   if (!user || user.is_admin !== 1) {
-    return <Navigate to="/mirrors" replace />
+    return <Navigate to="/images" replace />
   }
   return <>{children}</>
 }

@@ -31,7 +31,7 @@ export const DEFAULT_PROFILE = 'default'
 
 export function emptyConfig(): MirrorConfig {
   return {
-    version: 'v1',
+    version: 'v2',
     profiles: {
       [DEFAULT_PROFILE]: {
         registry: '',
