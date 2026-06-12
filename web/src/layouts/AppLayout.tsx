@@ -7,7 +7,6 @@ import type { User } from '@/hooks/useAuth'
 
 interface Props {
   loading: boolean
-  syncing: boolean
   error: string | null
   user: User
   onLogout: () => Promise<void>
@@ -23,7 +22,7 @@ const adminNavItems = [
   { to: '/admin', label: 'Admin' },
 ]
 
-export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
+export function AppLayout({ loading, error, user, onLogout }: Props) {
   const [dark, setDark] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('mirrorpilot.theme') === 'dark' ||
@@ -64,7 +63,7 @@ export function AppLayout({ loading, syncing, error, user, onLogout }: Props) {
             </nav>
           </div>
           <div className="flex items-center gap-2">
-            {(loading || syncing) && (
+            {loading && (
               <Loader2 className="size-4 animate-spin text-muted-foreground" />
             )}
             <div className="flex items-center gap-2">

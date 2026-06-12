@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
 import type { Db } from '../db'
@@ -129,15 +129,14 @@ syncRoutes.get('/pending', async (c) => {
       imageId: userImages.imageId,
       source: images.source,
       target: images.target,
-      targetOverride: userImages.targetOverride,
     })
     .from(userImages)
     .innerJoin(images, eq(images.id, userImages.imageId))
     .where(
       and(
         eq(userImages.userId, Number(userId)),
-        eq(userImages.enabled, 1),
-        eq(userImages.lastSyncStatus, 'syncing')
+        isNull(userImages.deletedAt),
+        eq(images.lastSyncStatus, 'syncing')
       )
     )
 
@@ -149,7 +148,7 @@ syncRoutes.get('/pending', async (c) => {
 
   const rows = uiRows.map((row) => {
     const profile = profileChoices.get(row.imageId)
-    const target = row.targetOverride || row.target
+    const target = row.target
     const targetWithNs = profile?.namespace ? `${profile.namespace}/${target}` : target
     return {
       id: row.imageId,
@@ -179,22 +178,22 @@ syncRoutes.post('/complete', async (c) => {
   const statements: BatchItem<'sqlite'>[] = body.results.map((result) =>
     result.success
       ? db
-          .update(userImages)
+          .update(images)
           .set({
             lastSyncStatus: 'synced',
             lastSyncAt: sql`datetime('now')`,
             lastError: '',
             updatedAt: sql`datetime('now')`,
           })
-          .where(eq(userImages.imageId, result.image_id))
+          .where(eq(images.id, result.image_id))
       : db
-          .update(userImages)
+          .update(images)
           .set({
             lastSyncStatus: 'failed',
             lastError: result.error || 'unknown error',
             updatedAt: sql`datetime('now')`,
           })
-          .where(eq(userImages.imageId, result.image_id))
+          .where(eq(images.id, result.image_id))
   )
 
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
@@ -286,14 +285,14 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
           .set({ status: 'succeeded', error: '', durationMs: ev.duration_ms ?? null, finishedAt: sql`datetime('now')` })
           .where(eq(jobItems.id, item.id)),
         db
-          .update(userImages)
+          .update(images)
           .set({
             lastSyncStatus: 'synced',
             lastSyncAt: sql`datetime('now')`,
             lastError: '',
             updatedAt: sql`datetime('now')`,
           })
-          .where(and(eq(userImages.userId, item.userId), eq(userImages.imageId, ev.image_id)))
+          .where(eq(images.id, ev.image_id))
       )
     } else {
       failed++
@@ -308,13 +307,13 @@ syncRoutes.post('/jobs/:id/events', async (c) => {
           })
           .where(eq(jobItems.id, item.id)),
         db
-          .update(userImages)
+          .update(images)
           .set({
             lastSyncStatus: 'failed',
             lastError: ev.error || 'unknown error',
             updatedAt: sql`datetime('now')`,
           })
-          .where(and(eq(userImages.userId, item.userId), eq(userImages.imageId, ev.image_id)))
+          .where(eq(images.id, ev.image_id))
       )
     }
 
@@ -392,7 +391,7 @@ syncRoutes.post('/jobs/:id/complete', async (c) => {
       })
       .where(eq(jobs.id, jobId)),
     db
-      .update(userImages)
+      .update(images)
       .set({
         lastSyncStatus: 'failed',
         lastError: 'no result reported',
@@ -401,13 +400,13 @@ syncRoutes.post('/jobs/:id/complete', async (c) => {
       .where(
         and(
           inArray(
-            userImages.imageId,
+            images.id,
             db
               .select({ imageId: jobItems.imageId })
               .from(jobItems)
               .where(and(eq(jobItems.jobId, jobId), eq(jobItems.status, 'failed')))
           ),
-          eq(userImages.lastSyncStatus, 'syncing')
+          eq(images.lastSyncStatus, 'syncing')
         )
       ),
     db.insert(syncJobEvents).values({
@@ -463,35 +462,47 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
   const userId = c.get('user').id
   const contentType = c.req.header('content-type') || ''
 
+  let requestedImageIds: number[] | null = null
+
   if (contentType.includes('application/json')) {
-    const body = await c.req.json<{ draft?: V2ConfigPayload } | V2ConfigPayload>().catch(() => null)
+    const body = await c.req.json<{ draft?: V2ConfigPayload; image_ids?: number[] } | V2ConfigPayload>().catch(() => null)
     if (body && typeof body === 'object') {
       const draft = 'draft' in body ? body.draft : body
       if (isV2ConfigPayload(draft)) {
         await materializeV2Config(db, userId, draft)
       }
+      if ('image_ids' in body && Array.isArray(body.image_ids)) {
+        requestedImageIds = body.image_ids.filter((id): id is number => typeof id === 'number' && Number.isFinite(id))
+      }
     }
   }
+
+  const baseFilter = and(eq(userImages.userId, userId), isNull(userImages.deletedAt), eq(images.isActive, 1))
+  const whereClause = requestedImageIds?.length
+    ? and(baseFilter, inArray(userImages.imageId, requestedImageIds))
+    : baseFilter
 
   const uiRows = await db
     .select({
       imageId: userImages.imageId,
       source: images.source,
       defaultTarget: images.target,
-      targetOverride: userImages.targetOverride,
-      enabled: userImages.enabled,
+      lastSyncStatus: images.lastSyncStatus,
     })
     .from(userImages)
     .innerJoin(images, eq(images.id, userImages.imageId))
-    .where(and(eq(userImages.userId, userId), eq(userImages.enabled, 1), eq(images.isActive, 1)))
+    .where(whereClause)
+
+  // Filter out already synced/syncing images
+  const syncableRows = uiRows.filter((r) => r.lastSyncStatus !== 'synced' && r.lastSyncStatus !== 'syncing')
 
   const profileChoices = await loadProfileChoiceForImages(
     db,
     userId,
-    uiRows.map((r) => r.imageId)
+    syncableRows.map((r) => r.imageId)
   )
 
-  const rows = uiRows
+  const rows = syncableRows
     .map((row) => {
       const profile = profileChoices.get(row.imageId)
       if (!profile) return null
@@ -499,7 +510,7 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
       return {
         id: row.imageId,
         source: row.source,
-        target: row.targetOverride || row.defaultTarget,
+        target: row.defaultTarget,
         profileId: profile.profileId,
         profile: profile.profileName,
         registry: profile.registry,
@@ -603,9 +614,9 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
 
   await db.batch([
     db
-      .update(userImages)
+      .update(images)
       .set({ lastSyncStatus: 'syncing', lastError: '', updatedAt: sql`datetime('now')` })
-      .where(and(eq(userImages.userId, userId), inArray(userImages.imageId, payload.map((img) => img.id)))),
+      .where(inArray(images.id, payload.map((img) => img.id))),
     db
       .update(jobItems)
       .set({ status: 'syncing' })

@@ -21,7 +21,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { triggerSync } from '@/lib/api'
+import { triggerSync, deleteImage } from '@/lib/api'
 import {
   Select,
   SelectContent,
@@ -48,6 +48,7 @@ interface Props {
   savedConfig: MirrorConfig
   setConfig: (updater: MirrorConfig | ((prev: MirrorConfig) => MirrorConfig)) => void
   reloadFromServer: () => Promise<void>
+  markSaved?: (cfg: MirrorConfig) => void
   loading: boolean
   lastSavedAt: number
 }
@@ -63,7 +64,7 @@ interface FormState {
 type SortField = 'enabled' | 'createdAt' | 'syncedAt'
 type SortDir = 'asc' | 'desc'
 type ImageSyncStatus = NonNullable<ImageEntry['status']>
-type DraftChangeType = 'new' | 'updated' | 'deleted'
+type DraftChangeType = 'new' | 'updated'
 const PAGE_SIZE = 20
 
 function isSameImage(a: ImageEntry, b: ImageEntry): boolean {
@@ -72,7 +73,6 @@ function isSameImage(a: ImageEntry, b: ImageEntry): boolean {
     a.target === b.target &&
     a.profile === b.profile &&
     a.enabled === b.enabled &&
-    Boolean(a.pinned) === Boolean(b.pinned) &&
     (a.notes || '') === (b.notes || '')
   )
 }
@@ -176,6 +176,8 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
   }>({ total: 0, items: [], loading: true, error: null })
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null)
   const [syncingNow, setSyncingNow] = useState(false)
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<number>>(new Set())
+  const [selectedDraftKeys, setSelectedDraftKeys] = useState<Set<string>>(new Set())
   const [refreshingNow, setRefreshingNow] = useState(false)
   const [latestRun, setLatestRun] = useState<{ id: number; status: string; conclusion: string | null; url: string } | null>(null)
   const handledCompletedRunIdRef = useRef<number | null>(null)
@@ -282,14 +284,8 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
         rows.push({ type: 'updated', image: img })
       }
     }
-    for (const saved of savedConfig.images) {
-      if (typeof saved.id !== 'number') continue
-      if (!localImageById.has(saved.id)) {
-        rows.push({ type: 'deleted', image: saved })
-      }
-    }
     return rows
-  }, [config.images, savedConfig.images, savedImageById, localImageById])
+  }, [config.images, savedImageById])
 
   const savedItemsMerged = useMemo(() => {
     return searchResult.items
@@ -400,9 +396,22 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
     setDeleteTarget(index)
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     if (deleteTarget === null) return
     const entry = config.images[deleteTarget]
+
+    if (typeof entry.id === 'number') {
+      // Saved image — call API to delete from DB directly
+      try {
+        await deleteImage(entry.id)
+      } catch (err) {
+        toast(`Failed to delete: ${err instanceof Error ? err.message : 'unknown error'}`)
+        setDeleteTarget(null)
+        return
+      }
+    }
+
+    // Remove from local config
     setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== deleteTarget) }))
     setListNonce((n) => n + 1)
     toast(`Removed ${entry.source}`)
@@ -485,22 +494,44 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
   async function handleTriggerSync() {
     setSyncingNow(true)
     try {
-      const result = await triggerSync(config)
+      // Collect selected saved image IDs
+      const idsToSync = selectedImageIds.size > 0 ? [...selectedImageIds] : undefined
+
+      // Collect selected draft images to materialize
+      const selectedDrafts = draftRows
+        .filter((row) => row.type === 'new' && selectedDraftKeys.has(`${row.image.source}\0${row.image.target}`))
+        .map((row) => row.image)
+
+      // Build a partial config containing only selected draft images for materialization
+      let draftConfig: MirrorConfig | undefined
+      if (selectedDrafts.length > 0) {
+        draftConfig = {
+          version: 'v2',
+          profiles: config.profiles,
+          images: selectedDrafts,
+        }
+      }
+
+      const result = await triggerSync(draftConfig, idsToSync)
       if (!result.ok || !result.count) {
         throw new Error(result.message || 'No images to sync')
       }
+
+      // Remove synced drafts from local config and update status
+      const syncedDraftKeys = new Set(selectedDrafts.map((d) => `${d.source}\0${d.target}`))
       setConfig((c) => ({
         ...c,
-        images: c.images.map((img) => {
-          const status = getImageSyncStatus(img)
-          if (!img.enabled || status === 'synced' || status === 'syncing') return img
-          return {
-            ...img,
-            status: 'syncing',
-            syncError: undefined,
-          }
-        }),
+        images: c.images
+          .filter((img) => !(typeof img.id !== 'number' && syncedDraftKeys.has(`${img.source}\0${img.target}`)))
+          .map((img) => {
+            const status = getImageSyncStatus(img)
+            if (status === 'synced' || status === 'syncing') return img
+            if (idsToSync && typeof img.id === 'number' && !idsToSync.includes(img.id)) return img
+            return { ...img, status: 'syncing', syncError: undefined }
+          }),
       }))
+      setSelectedImageIds(new Set())
+      setSelectedDraftKeys(new Set())
       toast(`Sync triggered for ${result.count} image${result.count === 1 ? '' : 's'} — track progress on the Jobs page`)
       await reloadFromServer()
       void refreshSyncState({ showCompleteToast: false })
@@ -547,9 +578,9 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                 <span>{latestRun.status === 'completed' ? latestRun.conclusion : latestRun.status}</span>
               </a>
             )}
-            <Button size="sm" variant="outline" onClick={handleTriggerSync} disabled={syncingNow}>
+            <Button size="sm" variant="outline" onClick={handleTriggerSync} disabled={syncingNow || (selectedImageIds.size === 0 && selectedDraftKeys.size === 0)}>
               {syncingNow ? <RefreshCw className="animate-spin" /> : <RefreshCw />}
-              Sync
+              Sync{(selectedImageIds.size + selectedDraftKeys.size) > 0 ? ` (${selectedImageIds.size + selectedDraftKeys.size})` : ''}
             </Button>
             <Button
               size="sm"
@@ -652,18 +683,52 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                   <Table className="table-fixed w-full min-w-[640px]">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[96px]">Type</TableHead>
+                        <TableHead className="w-[36px]">
+                          <input
+                            type="checkbox"
+                            className="size-3.5 rounded accent-primary"
+                            checked={draftRows.filter((r) => r.type === 'new').length > 0 && draftRows.filter((r) => r.type === 'new').every((r) => selectedDraftKeys.has(`${r.image.source}\0${r.image.target}`))}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedDraftKeys(new Set(draftRows.filter((r) => r.type === 'new').map((r) => `${r.image.source}\0${r.image.target}`)))
+                              } else {
+                                setSelectedDraftKeys(new Set())
+                              }
+                            }}
+                          />
+                        </TableHead>
+                        <TableHead className="w-[80px]">Type</TableHead>
                         <TableHead className="w-[34%]">Source</TableHead>
                         <TableHead className="w-[34%]">Target</TableHead>
                         <TableHead className="w-[96px]">Profile</TableHead>
                         <TableHead className="w-[96px]">Status</TableHead>
+                        <TableHead className="w-[48px]"></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {draftRows.map((row, idx) => (
+                      {draftRows.map((row, idx) => {
+                        const draftKey = `${row.image.source}\0${row.image.target}`
+                        return (
                         <TableRow key={`${row.type}-${row.image.id ?? 'draft'}-${row.image.source}-${idx}`}>
+                          <TableCell className="py-2 pr-1">
+                            {row.type === 'new' && (
+                              <input
+                                type="checkbox"
+                                className="size-3.5 rounded accent-primary"
+                                checked={selectedDraftKeys.has(draftKey)}
+                                onChange={(e) => {
+                                  setSelectedDraftKeys((prev) => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) next.add(draftKey)
+                                    else next.delete(draftKey)
+                                    return next
+                                  })
+                                }}
+                              />
+                            )}
+                          </TableCell>
                           <TableCell className="py-2">
-                            <Badge variant={row.type === 'deleted' ? 'destructive' : (row.type === 'new' ? 'success' : 'outline')}>
+                            <Badge variant={row.type === 'new' ? 'success' : 'outline'}>
                               {row.type}
                             </Badge>
                           </TableCell>
@@ -681,8 +746,32 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                           <TableCell className="py-2">
                             <SyncStatusBadge entry={row.image} />
                           </TableCell>
+                          <TableCell className="py-2">
+                            <button
+                              type="button"
+                              className="inline-flex items-center justify-center rounded p-1 text-muted-foreground hover:text-destructive"
+                              title="Remove"
+                              onClick={() => {
+                                const idx2 = config.images.findIndex((img) =>
+                                  img.source === row.image.source && img.target === row.image.target
+                                )
+                                if (idx2 >= 0) {
+                                  setConfig((c) => ({ ...c, images: c.images.filter((_, i) => i !== idx2) }))
+                                  setSelectedDraftKeys((prev) => {
+                                    const next = new Set(prev)
+                                    next.delete(draftKey)
+                                    return next
+                                  })
+                                  setListNonce((n) => n + 1)
+                                }
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </TableCell>
                         </TableRow>
-                      ))}
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
@@ -703,6 +792,20 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                   <Table className="table-fixed w-full min-w-[640px]">
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-[36px]">
+                        <input
+                          type="checkbox"
+                          className="size-3.5 rounded accent-primary"
+                          checked={visibleRows.length > 0 && visibleRows.every(({ img }) => typeof img.id === 'number' && selectedImageIds.has(img.id))}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedImageIds(new Set(visibleRows.map(({ img }) => img.id).filter((id): id is number => typeof id === 'number')))
+                            } else {
+                              setSelectedImageIds(new Set())
+                            }
+                          }}
+                        />
+                      </TableHead>
                       <TableHead
                         className="w-[96px] cursor-pointer select-none"
                         onClick={() => toggleSort('enabled')}
@@ -730,6 +833,23 @@ export function ImagesPage({ config, savedConfig, setConfig, reloadFromServer, l
                           key={typeof entry.id === 'number' ? `${entry.id}` : `${entry.source}-${entry.target}-${entry.profile}`}
                           className={!entry.enabled ? 'opacity-50' : ''}
                         >
+                          <TableCell className="py-2 pr-1">
+                            {typeof entry.id === 'number' && (
+                              <input
+                                type="checkbox"
+                                className="size-3.5 rounded accent-primary"
+                                checked={selectedImageIds.has(entry.id)}
+                                onChange={(e) => {
+                                  setSelectedImageIds((prev) => {
+                                    const next = new Set(prev)
+                                    if (e.target.checked) next.add(entry.id!)
+                                    else next.delete(entry.id!)
+                                    return next
+                                  })
+                                }}
+                              />
+                            )}
+                          </TableCell>
                           <TableCell className="py-2 pr-3">
                             <div className="flex flex-nowrap items-center">
                               <SyncStatusBadge entry={entry} />

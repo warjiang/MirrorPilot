@@ -21,6 +21,9 @@ interface ConfigV2Image {
   default_target: string
   is_active: number
   notes: string
+  last_sync_status: string
+  last_sync_at: string | null
+  last_error: string
   created_at: string
   updated_at: string
 }
@@ -37,15 +40,7 @@ interface ConfigV2UserProfile {
 interface ConfigV2UserImage {
   user_id: number
   image_id: number
-  enabled: number
-  pinned: number
-  target_override: string | null
-  notes: string
-  last_sync_status: string
-  last_sync_at: string | null
-  last_error: string
   created_at: string
-  updated_at: string
 }
 
 interface ConfigV2ImageProfile {
@@ -108,24 +103,24 @@ function fromV2(payload: ConfigV2Response): MirrorConfig {
     defaultProfileByImageId.set(Number(link.image_id), profile.name)
   }
 
-  const imageList: ImageEntry[] = (payload.user_images || []).map((ui) => {
+  const imageList = (payload.user_images || []).map((ui) => {
     const image = imagesById.get(Number(ui.image_id))
-    const status = String(ui.last_sync_status || 'pending')
+    if (!image) return null
+    const status = String(image.last_sync_status || 'pending')
     return {
       id: Number(ui.image_id),
-      source: String(image?.source || ''),
-      target: String(ui.target_override || image?.default_target || ''),
+      source: String(image.source || ''),
+      target: String(image.default_target || ''),
       profile: defaultProfileByImageId.get(Number(ui.image_id)) || DEFAULT_PROFILE,
-      enabled: Number(ui.enabled) === 1,
-      pinned: Number(ui.pinned) === 1 ? true : undefined,
+      enabled: Number(image.is_active) === 1,
       synced: status === 'synced' ? true : undefined,
       status: normalizeStatus(status),
-      syncError: ui.last_error || undefined,
-      notes: ui.notes || image?.notes || undefined,
-      createdAt: image?.created_at || undefined,
-      syncedAt: ui.last_sync_at || undefined,
-    }
-  }).filter((img) => img.source)
+      syncError: image.last_error || undefined,
+      notes: image.notes || undefined,
+      createdAt: image.created_at || undefined,
+      syncedAt: image.last_sync_at || undefined,
+    } satisfies ImageEntry
+  }).filter((img): img is NonNullable<typeof img> => !!img && !!img.source)
 
   return {
     version: payload.version || 'v2',
@@ -161,6 +156,9 @@ export function toV2Payload(config: MirrorConfig): ConfigV2Response {
     default_target: img.target,
     is_active: img.enabled ? 1 : 0,
     notes: img.notes || '',
+    last_sync_status: img.status || (img.synced ? 'synced' : 'pending'),
+    last_sync_at: img.syncedAt || null,
+    last_error: img.syncError || '',
     created_at: img.createdAt || '',
     updated_at: '',
   }))
@@ -177,15 +175,7 @@ export function toV2Payload(config: MirrorConfig): ConfigV2Response {
   const user_images: ConfigV2UserImage[] = config.images.map((img, i) => ({
     user_id: 0,
     image_id: typeof img.id === 'number' ? img.id : (1000000 + i),
-    enabled: img.enabled ? 1 : 0,
-    pinned: img.pinned ? 1 : 0,
-    target_override: img.target,
-    notes: img.notes || '',
-    last_sync_status: img.status || (img.synced ? 'synced' : 'pending'),
-    last_sync_at: img.syncedAt || null,
-    last_error: img.syncError || '',
     created_at: img.createdAt || '',
-    updated_at: '',
   }))
 
   const image_profiles: ConfigV2ImageProfile[] = config.images.map((img, i) => ({

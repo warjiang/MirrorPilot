@@ -101,6 +101,9 @@ export const images = sqliteTable(
     target: text('default_target').notNull(),
     isActive: integer('is_active').notNull().default(1),
     notes: text('notes').notNull().default(''),
+    lastSyncStatus: text('last_sync_status').notNull().default('pending'),
+    lastSyncAt: text('last_sync_at'),
+    lastError: text('last_error').notNull().default(''),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(datetime('now'))`),
@@ -111,6 +114,7 @@ export const images = sqliteTable(
   (t) => [
     index('idx_images_source').on(t.source),
     index('idx_images_active').on(t.isActive),
+    index('idx_images_sync_status').on(t.lastSyncStatus),
   ]
 )
 
@@ -148,24 +152,14 @@ export const userImages = sqliteTable(
     imageId: integer('image_id')
       .notNull()
       .references(() => images.id, { onDelete: 'cascade' }),
-    enabled: integer('enabled').notNull().default(1),
-    pinned: integer('pinned').notNull().default(0),
-    targetOverride: text('target_override'),
-    notes: text('notes').notNull().default(''),
-    lastSyncStatus: text('last_sync_status').notNull().default('pending'),
-    lastSyncAt: text('last_sync_at'),
-    lastError: text('last_error').notNull().default(''),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(datetime('now'))`),
-    updatedAt: text('updated_at')
-      .notNull()
-      .default(sql`(datetime('now'))`),
+    deletedAt: text('deleted_at'),
   },
   (t) => [
     uniqueIndex('user_images_user_id_image_id_unique').on(t.userId, t.imageId),
-    index('idx_user_images_user_enabled_pinned').on(t.userId, t.enabled, t.pinned),
-    index('idx_user_images_last_sync').on(t.userId, t.lastSyncStatus),
+    index('idx_user_images_user').on(t.userId, t.deletedAt),
   ]
 )
 

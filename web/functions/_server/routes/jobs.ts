@@ -5,7 +5,7 @@ import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
 import type { Db } from '../db'
 import type { Env } from '../env'
-import { jobItems, jobs, syncJobEvents, userImages } from '../db/schema'
+import { images, jobItems, jobs, syncJobEvents } from '../db/schema'
 import { githubHeaders } from '../lib/github'
 
 export const jobsRoutes = new Hono<AppEnv>()
@@ -105,16 +105,17 @@ async function reconcile(db: Db, env: Env, job: JobRow): Promise<JobRow> {
       })
       .where(eq(jobs.id, job.id)),
     db
-      .update(userImages)
+      .update(images)
       .set({
         lastSyncStatus: status === 'cancelled' ? 'pending' : 'failed',
         lastError: status === 'cancelled' ? '' : (error || 'workflow completed without item callback'),
+        updatedAt: sql`datetime('now')`,
       })
       .where(
         and(
-          eq(userImages.lastSyncStatus, 'syncing'),
+          eq(images.lastSyncStatus, 'syncing'),
           inArray(
-            userImages.imageId,
+            images.id,
             db.select({ id: jobItems.imageId }).from(jobItems).where(eq(jobItems.jobId, job.id))
           )
         )
@@ -291,13 +292,13 @@ jobsRoutes.post('/:id/cancel', async (c) => {
       .set({ status: 'cancelled', finishedAt: sql`datetime('now')` })
       .where(and(eq(jobItems.jobId, jobId), inArray(jobItems.status, ['pending', 'syncing']))),
     db
-      .update(userImages)
-      .set({ lastSyncStatus: 'pending', lastError: '', lastSyncAt: null })
+      .update(images)
+      .set({ lastSyncStatus: 'pending', lastError: '', lastSyncAt: null, updatedAt: sql`datetime('now')` })
       .where(
         and(
-          eq(userImages.lastSyncStatus, 'syncing'),
+          eq(images.lastSyncStatus, 'syncing'),
           inArray(
-            userImages.imageId,
+            images.id,
             db
               .select({ id: jobItems.imageId })
               .from(jobItems)
