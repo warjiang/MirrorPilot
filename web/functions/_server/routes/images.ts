@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import type { Context } from 'hono'
 import { and, asc, desc, eq, inArray, like, or, sql } from 'drizzle-orm'
 import type { BatchItem } from 'drizzle-orm/batch'
 import type { AppEnv } from '../types'
@@ -276,7 +277,7 @@ function imageKey(source: string, target: string): string {
   return `${source}\u0000${target}`
 }
 
-export const getConfigHandler = async (c: any) => {
+export const getConfigHandler = async (c: Context<AppEnv>) => {
   const db = c.get('db')
   const user = c.get('user')
 
@@ -292,7 +293,7 @@ export const getConfigHandler = async (c: any) => {
   })
 }
 
-export const putConfigHandler = async (c: any) => {
+export const putConfigHandler = async (c: Context<AppEnv>) => {
   const db = c.get('db')
   const userId = c.get('user').id
 
