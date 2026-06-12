@@ -668,9 +668,8 @@ imagesRoutes.get('/search', async (c) => {
               username: profiles.username,
               password: profiles.passwordSecret,
             })
-            .from(userProfiles)
-            .innerJoin(profiles, eq(profiles.id, userProfiles.profileId))
-            .where(and(eq(userProfiles.userId, userId), eq(userProfiles.enabled, 1)))
+            .from(profiles)
+            .where(eq(profiles.isActive, 1))
             .orderBy(asc(profiles.name))
         ).map((row) => [
           row.name,
