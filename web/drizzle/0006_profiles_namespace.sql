@@ -1,0 +1,1 @@
+ALTER TABLE profiles ADD COLUMN namespace TEXT NOT NULL DEFAULT '';

@@ -17,6 +17,7 @@ interface ProfileEntity {
   id: number
   name: string
   registry: string
+  namespace: string
   auth_type: string
   username: string
   password_secret: string
@@ -89,6 +90,7 @@ export interface V2ConfigPayload {
     id?: number
     name: string
     registry?: string
+    namespace?: string
     auth_type?: string
     username?: string
     password_secret?: string
@@ -194,6 +196,7 @@ async function loadUserState(db: Db, userId: number) {
         id: profiles.id,
         name: profiles.name,
         registry: profiles.registry,
+        namespace: profiles.namespace,
         auth_type: profiles.authType,
         username: profiles.username,
         password_secret: profiles.passwordSecret,
@@ -319,6 +322,7 @@ export async function materializeV2Config(db: Db, userId: number, body: V2Config
       .values({
         name,
         registry: String(p.registry || '').trim(),
+        namespace: String(p.namespace || '').trim(),
         authType: String(p.auth_type || 'basic'),
         username: String(p.username || ''),
         passwordSecret: String(p.password_secret || ''),
@@ -328,6 +332,7 @@ export async function materializeV2Config(db: Db, userId: number, body: V2Config
         target: profiles.name,
         set: {
           registry: String(p.registry || '').trim(),
+          namespace: String(p.namespace || '').trim(),
           authType: String(p.auth_type || 'basic'),
           username: String(p.username || ''),
           passwordSecret: String(p.password_secret || ''),
@@ -659,6 +664,7 @@ imagesRoutes.get('/search', async (c) => {
             .select({
               name: profiles.name,
               registry: profiles.registry,
+              namespace: profiles.namespace,
               username: profiles.username,
               password: profiles.passwordSecret,
             })
@@ -670,6 +676,7 @@ imagesRoutes.get('/search', async (c) => {
           row.name,
           {
             registry: row.registry,
+            namespace: row.namespace || undefined,
             username: row.username || undefined,
             password: row.password || undefined,
           } satisfies RegistryProfile,
