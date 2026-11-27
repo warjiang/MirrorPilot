@@ -24,16 +24,52 @@ jobs:
 
       - name: Parse payload
         id: parse
+        env:
+          # Read the payload through an env var instead of inlining ${{ }} into the
+          # script (prevents script injection). The payload carries no credentials.
+          IMAGES_JSON: ${{ toJSON(github.event.client_payload.images) }}
         run: |
-          echo '${{ toJSON(github.event.client_payload.images) }}' > /tmp/images.json
+          printf '%s' "$IMAGES_JSON" > /tmp/images.json
+          if jq -e '[.[] | select(has("password") or has("username"))] | length > 0' /tmp/images.json >/dev/null; then
+            echo "::error::Dispatch payload contains credentials; refusing to run. Update the web app."
+            exit 1
+          fi
           IMAGE_COUNT=$(jq 'length' /tmp/images.json)
-          echo "image_count=$IMAGE_COUNT" >> $GITHUB_OUTPUT
+          echo "image_count=$IMAGE_COUNT" >> "$GITHUB_OUTPUT"
           echo "Received $IMAGE_COUNT images to sync:"
-          jq '.[].source' /tmp/images.json
+          jq -r '.[] | "  \(.source) -> \(.registry)/\(.target)"' /tmp/images.json
 
       - name: Set up skopeo
         if: steps.parse.outputs.image_count != '0'
         uses: warjiang/setup-skopeo@v0.1.3
+
+      - name: Log in to target registries
+        if: steps.parse.outputs.image_count != '0'
+        run: |
+          export REGISTRY_AUTH_FILE="$RUNNER_TEMP/auth.json"
+          echo '{}' > "$REGISTRY_AUTH_FILE"
+          chmod 600 "$REGISTRY_AUTH_FILE"
+          echo "REGISTRY_AUTH_FILE=$REGISTRY_AUTH_FILE" >> "$GITHUB_ENV"
+
+          jq -r '[.[] | select(.has_credentials == true and (.registry // "") != "") | "\(.profile_id // "")\t\(.registry)"] | unique | .[]' /tmp/images.json |
+          while IFS=$'\t' read -r PROFILE_ID REGISTRY; do
+            HOST="${REGISTRY%%/*}"
+            if [ -n "$PROFILE_ID" ]; then
+              QUERY="profile_id=${PROFILE_ID}"
+            else
+              QUERY="registry=$(jq -rn --arg r "$REGISTRY" '$r|@uri')"
+            fi
+            CREDS=$(curl -sf -H "Authorization: Bearer $SYNC_SECRET" "$WEB_API_BASE_URL/api/secrets/ci?${QUERY}") || {
+              echo "::warning::No credentials for $HOST (profile ${PROFILE_ID:-n/a}); pushes may fail"
+              continue
+            }
+            REG_USER=$(jq -r '.destUser' <<<"$CREDS")
+            PASS=$(jq -r '.destPass' <<<"$CREDS")
+            echo "::add-mask::$REG_USER"
+            echo "::add-mask::$PASS"
+            printf '%s' "$PASS" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$REG_USER" --password-stdin "$HOST" >/dev/null
+            echo "Logged in to $HOST"
+          done
 
       - name: Sync images
         if: steps.parse.outputs.image_count != '0'
@@ -50,12 +86,10 @@ jobs:
           }
 
           jq -c '.[]' /tmp/images.json | while IFS= read -r img; do
-            IMAGE_ID=$(echo "$img" | jq -r '.id')
-            SOURCE=$(echo "$img" | jq -r '.source')
-            TARGET=$(echo "$img" | jq -r '.target')
-            REGISTRY=$(echo "$img" | jq -r '.registry // empty')
-            USERNAME=$(echo "$img" | jq -r '.username // empty')
-            PASSWORD=$(echo "$img" | jq -r '.password // empty')
+            IMAGE_ID=$(jq -r '.id' <<<"$img")
+            SOURCE=$(jq -r '.source' <<<"$img")
+            TARGET=$(jq -r '.target' <<<"$img")
+            REGISTRY=$(jq -r '.registry // empty' <<<"$img")
 
             if [ -n "$REGISTRY" ]; then
               FULL_TARGET="${REGISTRY}/${TARGET}"
@@ -65,14 +99,9 @@ jobs:
 
             echo "::group::Syncing $SOURCE -> $FULL_TARGET"
 
-            DEST_CREDS_ARG=""
-            if [ -n "$USERNAME" ] && [ -n "$PASSWORD" ]; then
-              DEST_CREDS_ARG="--dest-creds ${USERNAME}:${PASSWORD}"
-            fi
-
             START_MS=$(date +%s%3N)
-            SKOPEO_OUTPUT=$(skopeo copy --all \
-              $DEST_CREDS_ARG \
+            SKOPEO_OUTPUT=$(skopeo copy --all --retry-times 3 \
+              --authfile "$REGISTRY_AUTH_FILE" \
               "docker://${SOURCE}" \
               "docker://${FULL_TARGET}" 2>&1) && SKOPEO_RC=0 || SKOPEO_RC=$?
 
@@ -81,7 +110,6 @@ jobs:
               echo "✅ Success (${DURATION_MS}ms)"
               report_event "{\"image_id\": $IMAGE_ID, \"success\": true, \"duration_ms\": $DURATION_MS}"
             else
-              # Extract meaningful error from skopeo output
               LAST_LINE=$(echo "$SKOPEO_OUTPUT" | grep -i "level=fatal\|error\|unauthorized\|denied\|forbidden" | tail -1)
               if echo "$LAST_LINE" | grep -qi "insufficient scopes"; then
                 ERROR="Token 权限不足，请到 Docker Hub 重新生成 Access Token 并选择 Read & Write 权限"
@@ -90,7 +118,6 @@ jobs:
               elif echo "$LAST_LINE" | grep -qi "denied\|forbidden"; then
                 ERROR="访问被拒绝，请确认目标仓库存在且有推送权限"
               elif [ -n "$LAST_LINE" ]; then
-                # Strip timestamp prefix from skopeo fatal messages
                 ERROR=$(echo "$LAST_LINE" | sed 's/^time="[^"]*" level=fatal msg="//;s/"$//')
               else
                 ERROR="skopeo copy failed for ${SOURCE}"

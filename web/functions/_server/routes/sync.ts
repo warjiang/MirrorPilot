@@ -568,8 +568,10 @@ ciSecretsRoutes.get('/', async (c) => {
   }
 
   const registry = c.req.query('registry')
-  if (!registry) {
-    return c.json({ error: 'registry query parameter is required' }, 400)
+  const profileId = Number(c.req.query('profile_id') || '')
+  const hasProfileId = Number.isInteger(profileId) && profileId > 0
+  if (!registry && !hasProfileId) {
+    return c.json({ error: 'registry or profile_id query parameter is required' }, 400)
   }
 
   const db = c.get('db')
@@ -578,7 +580,7 @@ ciSecretsRoutes.get('/', async (c) => {
     .from(profiles)
     .where(
       and(
-        eq(profiles.registry, registry),
+        hasProfileId ? eq(profiles.id, profileId) : eq(profiles.registry, registry as string),
         eq(profiles.isActive, 1),
         isNotNull(profiles.passwordSecret)
       )
@@ -681,13 +683,16 @@ syncRoutes.post('/trigger', authMiddleware, async (c) => {
 
   const payload = rows.map((row) => {
     const targetWithNs = row.namespace ? `${row.namespace}/${row.target}` : row.target
+    // Never put credentials into the dispatch payload: repository_dispatch payloads
+    // end up in (public) Actions logs. The workflow fetches them at runtime from
+    // /api/secrets/ci (SYNC_SECRET auth) and masks them.
     return {
       id: row.id,
       source: row.source,
       target: targetWithNs,
       registry: row.registry || '',
-      username: row.username_env || '',
-      password: row.password_env || '',
+      profile_id: row.profileId,
+      has_credentials: !!(row.username_env && row.password_env),
     }
   })
 
